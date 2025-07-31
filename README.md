@@ -290,6 +290,46 @@ EMAIL_SERVICE=your-email-service
 4. Push to the branch (`git push origin feature/AmazingFeature`)
 5. Open a Pull Request
 
+## 📅 업데이트 히스토리
+
+### 2025-07-31 (최신) 
+#### 🔧 시스템 안정성 및 AI 개선
+- **Docker 시스템 복구**: Docker Desktop 재설치 후 전체 프로젝트 재빌드 및 복구 완료
+- **MongoDB 연결 최적화**: 
+  - Admin Backend & Client Backend MongoDB 연결 설정 통일
+  - Docker Compose 환경변수와 일치하도록 연결 URI 수정
+  - 데이터베이스명 `hireme`로 통일
+- **포트 충돌 해결**: 
+  - Admin Backend: 8001 포트 고정
+  - Client Backend: 8000 포트 고정
+  - Dockerfile 내 포트 설정 일치 확인
+- **인재 데이터 관리**: 
+  - MongoDB 초기화 스크립트에 5명 샘플 인재 데이터 추가
+  - 김철수, 이영희, 박민수, 정수진, 최하늘 프로필 포함
+  - API를 통한 실시간 데이터 조회 기능 검증
+- **AI 매칭 시스템 개선**:
+  - `ai_matching_service.py` 신규 모듈 개발
+  - HuggingFace `sentence-transformers` 모델 임시 비활성화 (빌드 최적화)
+  - Gemini AI 챗봇 기능 유지 및 안정성 확보
+  - 향상된 규칙 기반 매칭 알고리즘 적용
+  - 의미적 유사도 계산 및 AI 기반 추천 이유 생성
+- **시스템 검증**: 
+  - 전체 API 엔드포인트 정상 작동 확인
+  - Frontend-Backend 연동 테스트 완료
+  - 데이터 동기화 및 실시간 업데이트 검증
+  - 브라우저에서 Admin/Client 페이지 정상 실행 확인
+
+#### 🚀 주요 기술 스택 업데이트
+- **AI/ML**: Gemini 1.5 Flash 챗봇, 규칙 기반 매칭 알고리즘
+- **Database**: MongoDB 5명 인재 데이터 with AI 프로필
+- **Infrastructure**: Docker Compose 기반 마이크로서비스 아키텍처
+- **API**: FastAPI RESTful 서비스 (Admin: 8001, Client: 8000)
+
+#### 🔧 개발자 노트
+- HuggingFace 모델은 향후 프로덕션 환경에서 재활성화 예정
+- MongoDB 볼륨 데이터 보존으로 데이터 영속성 확보
+- Docker 이미지 캐싱으로 빌드 시간 단축
+
 ## 📄 라이선스
 
 이 프로젝트는 MIT 라이선스 하에 배포됩니다. 자세한 내용은 `LICENSE` 파일을 참조하세요.
