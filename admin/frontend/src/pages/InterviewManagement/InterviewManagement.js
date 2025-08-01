@@ -1,5 +1,7 @@
 import React, { useState, useEffect, useRef } from 'react';
 import './InterviewManagement.css';
+import InterviewCalendarView from './components/InterviewCalendarView';
+import CalendarScheduleModal from './components/CalendarScheduleModal';
 import { 
   FiVideo, 
   FiCalendar, 
@@ -31,6 +33,8 @@ import {
   FiEdit3,
   FiSend,
   FiArchive,
+  FiBarChart3,
+  FiList
   FiBarChart3
 } from 'react-icons/fi';
 
@@ -326,6 +330,12 @@ const InterviewManagement = () => {
     platform: 'Zoom'
   });
   const [notifications, setNotifications] = useState([]);
+  
+  // 캘린더 관련 상태
+  const [viewMode, setViewMode] = useState('grid'); // 'grid' or 'calendar'
+  const [currentDate, setCurrentDate] = useState(new Date());
+  const [isCalendarScheduleModalOpen, setIsCalendarScheduleModalOpen] = useState(false);
+  const [selectedDate, setSelectedDate] = useState('');
 
   // 콘텐츠 영역 크기 변경 감지
   useEffect(() => {
@@ -496,6 +506,25 @@ const InterviewManagement = () => {
       return;
     }
 
+  // 피드백 전송
+  const sendFeedback = (applicantId, feedbackData) => {
+    // 유효성 검사
+    if (!feedbackData.content.trim()) {
+      showNotification('피드백 내용을 입력해주세요.', 'error');
+      return;
+    }
+
+    if (!feedbackData.channel) {
+      showNotification('전송 채널을 선택해주세요.', 'error');
+      return;
+    }
+
+    // 결과가 선택되지 않은 경우
+    const applicant = applicants.find(a => a.id === applicantId);
+    if (applicant && applicant.evaluation.result === 'pending') {
+      showNotification('합격/불합격 결과를 먼저 선택해주세요.', 'error');
+      return;
+    }
     setApplicants(prev => prev.map(applicant => 
       applicant.id === applicantId 
         ? { ...applicant, feedback: { ...feedbackData, sent: true, sentAt: new Date().toLocaleString('ko-KR') } }
@@ -721,6 +750,100 @@ const getStatusText = (status) => {
     return resultMap[result] || result;
   };
 
+  // 캘린더 관련 함수들
+  const getInterviewsForDate = (dateStr) => {
+    return applicants.filter(applicant => applicant.interviewDate === dateStr);
+  };
+
+  const navigateMonth = (direction) => {
+    const newDate = new Date(currentDate);
+    newDate.setMonth(newDate.getMonth() + direction);
+    setCurrentDate(newDate);
+  };
+
+  const openCalendarScheduleModal = (dateStr) => {
+    setSelectedDate(dateStr);
+    setNewSchedule(prev => ({ ...prev, interviewDate: dateStr }));
+    setIsCalendarScheduleModalOpen(true);
+  };
+
+  const createCalendarSchedule = () => {
+    // 유효성 검사
+    if (!newSchedule.name.trim()) {
+      showNotification('지원자 이름을 입력해주세요.', 'error');
+      return;
+    }
+    if (!newSchedule.position.trim()) {
+      showNotification('지원 직무를 입력해주세요.', 'error');
+      return;
+    }
+    if (!newSchedule.email.trim()) {
+      showNotification('이메일을 입력해주세요.', 'error');
+      return;
+    }
+    if (!newSchedule.phone.trim()) {
+      showNotification('연락처를 입력해주세요.', 'error');
+      return;
+    }
+    if (!newSchedule.interviewTime) {
+      showNotification('면접 시간을 선택해주세요.', 'error');
+      return;
+    }
+
+    // 새 지원자 생성
+    const newApplicant = {
+      id: Math.max(...applicants.map(a => a.id)) + 1,
+      name: newSchedule.name,
+      position: newSchedule.position,
+      email: newSchedule.email,
+      phone: newSchedule.phone,
+      interviewDate: newSchedule.interviewDate,
+      interviewTime: newSchedule.interviewTime,
+      duration: newSchedule.duration,
+      status: 'scheduled',
+      type: newSchedule.type,
+      platform: newSchedule.platform,
+      aiScore: 0,
+      documents: {
+        resume: { exists: false, summary: '', keywords: [], content: '' },
+        portfolio: { exists: false, summary: '', keywords: [], content: '' },
+        coverLetter: { exists: false, summary: '', keywords: [], content: '' }
+      },
+      questions: [],
+      evaluation: {
+        technicalScore: 0,
+        communicationScore: 0,
+        cultureScore: 0,
+        overallScore: 0,
+        memo: '',
+        result: 'pending'
+      },
+      feedback: {
+        sent: false,
+        content: '',
+        channel: 'email',
+        sentAt: null
+      }
+    };
+
+    setApplicants(prev => [...prev, newApplicant]);
+    setIsCalendarScheduleModalOpen(false);
+    // 폼 초기화
+    setNewSchedule({
+      name: '',
+      position: '',
+      email: '',
+      phone: '',
+      interviewDate: '',
+      interviewTime: '',
+      duration: '60분',
+      type: '비대면',
+      platform: 'Zoom'
+    });
+    setSelectedDate('');
+    showNotification('면접 일정이 성공적으로 등록되었습니다.');
+  };
+
   return (
     <div className="interview-management" ref={contentRef}>
       {/* 알림 토스트 */}
@@ -754,6 +877,30 @@ const getStatusText = (status) => {
       <div className="header">
         <h1>면접자 관리</h1>
         <div className="header-actions">
+          <div className="view-mode-toggle">
+            <button 
+              className={`btn ${viewMode === 'grid' ? 'btn-primary' : 'btn-secondary'}`}
+              onClick={() => setViewMode('grid')}
+            >
+              <FiList />
+              목록형
+            </button>
+            <button 
+              className={`btn ${viewMode === 'calendar' ? 'btn-primary' : 'btn-secondary'}`}
+              onClick={() => setViewMode('calendar')}
+            >
+              <FiCalendar />
+              캘린더형
+            </button>
+          </div>
+          {viewMode === 'grid' && (
+            <div className="view-controls">
+              <span>콘텐츠 영역 크기에 따라 자동 조정</span>
+              <span className="current-view">
+                현재: {applicantsPerRow}명씩 표시 ({contentWidth}px)
+              </span>
+            </div>
+          )}
           <div className="view-controls">
             <span>콘텐츠 영역 크기에 따라 자동 조정</span>
             <span className="current-view">
@@ -822,6 +969,304 @@ const getStatusText = (status) => {
           </select>
         </div>
       </div>
+
+      {/* 뷰 모드에 따른 컨텐츠 렌더링 */}
+      {viewMode === 'grid' ? (
+        /* 지원자 그리드 */
+        <div 
+          className="applicants-grid"
+          style={{ 
+            gridTemplateColumns: `repeat(${applicantsPerRow}, 1fr)` 
+          }}
+        >
+          {filteredApplicants.map((applicant) => (
+            <div key={applicant.id} className="applicant-card">
+              {/* 지원자 헤더 */}
+              <div className="applicant-header">
+                <div className="applicant-info">
+                  <h3 className="applicant-name">{applicant.name}</h3>
+                  <p className="applicant-position">{applicant.position}</p>
+                  <div className="applicant-contact">
+                    <span><FiMail /> {maskPersonalInfo(applicant.email)}</span>
+                    <span><FiPhone /> {maskPersonalInfo(applicant.phone)}</span>
+                  </div>
+                </div>
+                <div className={`status-badge ${applicant.status}`}>
+                  {getStatusText(applicant.status)}
+                </div>
+              </div>
+
+              {/* 면접 정보 */}
+              <div className="interview-info">
+                <div className="info-row">
+                  <span className="label">면접일시:</span>
+                  <span className="value">{applicant.interviewDate} {applicant.interviewTime}</span>
+                </div>
+                <div className="info-row">
+                  <span className="label">소요시간:</span>
+                  <span className="value">{applicant.duration}</span>
+                </div>
+                <div className="info-row">
+                  <span className="label">면접유형:</span>
+                  <span className="value">{applicant.type} ({applicant.platform})</span>
+                </div>
+                </div>
+                
+              {/* AI 점수 */}
+              {applicant.aiScore > 0 && (
+                <div className="ai-score">
+                  <div className="score-header">
+                    <FiStar />
+                    <span>AI 면접 점수</span>
+                    <span className="score-value">{applicant.aiScore}점</span>
+                  </div>
+                  <div className="score-bar">
+                    <div className="score-fill" style={{ width: `${applicant.aiScore}%` }}></div>
+                  </div>
+                </div>
+              )}
+
+              {/* 간단한 정보 요약 */}
+              <div className="info-summary">
+                <div className="summary-item">
+                  <FiFileText />
+                  <span>서류: {applicant.documents.resume.exists ? '제출' : '미제출'}</span>
+                </div>
+                {applicant.questions.length > 0 && (
+                  <div className="summary-item">
+                    <FiVideo />
+                    <span>영상: {applicant.questions.length}개</span>
+                  </div>
+                )}
+                {applicant.evaluation.overallScore > 0 && (
+                  <div className="summary-item">
+                    <FiStar />
+                    <span>평가: {applicant.evaluation.overallScore}점</span>
+                  </div>
+                )}
+              </div>
+
+              {/* 액션 버튼 */}
+              <div className="action-buttons">
+                <button 
+                  className="btn btn-primary"
+                  onClick={() => {
+                    setSelectedApplicant(applicant);
+                  setIsDetailModalOpen(true);
+                  }}
+                >
+                  <FiEye />
+                  상세보기
+                </button>
+                {applicant.questions.length > 0 && (
+                  <button 
+                    className="btn btn-secondary"
+                    onClick={() => downloadApplicantFiles(applicant)}
+                  >
+                  <FiDownload />
+                    다운로드
+                  </button>
+                )}
+                <button 
+                  className="btn btn-secondary"
+                  onClick={() => openFeedbackModal(applicant)}
+                >
+                  <FiMessageSquare />
+                  결과 전송
+                </button>
+              </div>
+            </div>
+          ))}
+        </div>
+      ) : (
+        /* 캘린더 뷰 */
+        <InterviewCalendarView
+          currentDate={currentDate}
+          applicants={applicants}
+          navigateMonth={navigateMonth}
+          openCalendarScheduleModal={openCalendarScheduleModal}
+          getStatusText={getStatusText}
+        />
+      )}
+
+      {/* 상세보기 모달 */}
+      {isDetailModalOpen && selectedApplicant && (
+        <div className="modal-overlay" onClick={() => setIsDetailModalOpen(false)}>
+          <div className="modal-content" onClick={(e) => e.stopPropagation()}>
+            <div className="modal-header">
+              <h2>{selectedApplicant.name} 상세정보</h2>
+              <button 
+                className="btn-icon"
+                onClick={() => setIsDetailModalOpen(false)}
+              >
+                <FiX />
+              </button>
+            </div>
+            <div className="modal-body">
+              {/* 상세 정보 내용 */}
+              <div className="detail-section">
+                <h3>기본 정보</h3>
+                <div className="detail-grid">
+                  <div className="detail-item">
+                    <span className="label">이름</span>
+                    <span className="value">{selectedApplicant.name}</span>
+                  </div>
+                  <div className="detail-item">
+                    <span className="label">지원 직무</span>
+                    <span className="value">{selectedApplicant.position}</span>
+                  </div>
+                  <div className="detail-item">
+                    <span className="label">이메일</span>
+                    <span className="value">{maskPersonalInfo(selectedApplicant.email)}</span>
+                  </div>
+                  <div className="detail-item">
+                    <span className="label">연락처</span>
+                    <span className="value">{maskPersonalInfo(selectedApplicant.phone)}</span>
+                  </div>
+                </div>
+              </div>
+
+              <div className="detail-section">
+                <h3>면접 정보</h3>
+                <div className="detail-grid">
+                  <div className="detail-item">
+                    <span className="label">면접 일시</span>
+                    <span className="value">{selectedApplicant.interviewDate} {selectedApplicant.interviewTime}</span>
+                  </div>
+                  <div className="detail-item">
+                    <span className="label">소요 시간</span>
+                    <span className="value">{selectedApplicant.duration}</span>
+                  </div>
+                  <div className="detail-item">
+                    <span className="label">면접 유형</span>
+                    <span className="value">{selectedApplicant.type}</span>
+                  </div>
+                  <div className="detail-item">
+                    <span className="label">플랫폼</span>
+                    <span className="value">{selectedApplicant.platform}</span>
+                  </div>
+                  <div className="detail-item">
+                    <span className="label">상태</span>
+                    <span className={`status-badge ${selectedApplicant.status}`}>
+                      {getStatusText(selectedApplicant.status)}
+                    </span>
+                  </div>
+                </div>
+              </div>
+
+              {/* 문서 정보 */}
+              <div className="detail-section">
+                <h3>제출 서류</h3>
+                <div className="detail-grid">
+                  <div className="detail-item">
+                    <span className="label">이력서</span>
+                    <span className="value">
+                      {selectedApplicant.documents.resume.exists ? (
+                        <button 
+                          className="btn-link"
+                          onClick={() => viewDocument({ type: 'resume', ...selectedApplicant.documents.resume })}
+                        >
+                          상세보기
+                        </button>
+                      ) : (
+                        <span className="no-document">제출 내역 없음</span>
+                      )}
+                    </span>
+                  </div>
+                  <div className="detail-item">
+                    <span className="label">포트폴리오</span>
+                    <span className="value">
+                      {selectedApplicant.documents.portfolio.exists ? (
+                        <button 
+                          className="btn-link"
+                          onClick={() => viewDocument({ type: 'portfolio', ...selectedApplicant.documents.portfolio })}
+                        >
+                          상세보기
+                        </button>
+                      ) : (
+                        <span className="no-document">제출 내역 없음</span>
+                      )}
+                    </span>
+                  </div>
+                  <div className="detail-item">
+                    <span className="label">자기소개서</span>
+                    <span className="value">
+                      {selectedApplicant.documents.coverLetter.exists ? (
+                        <button 
+                          className="btn-link"
+                          onClick={() => viewDocument({ type: 'coverLetter', ...selectedApplicant.documents.coverLetter })}
+                        >
+                          상세보기
+                        </button>
+                      ) : (
+                        <span className="no-document">제출 내역 없음</span>
+                      )}
+                    </span>
+                  </div>
+                </div>
+              </div>
+
+              {/* 질문 및 답변 */}
+              {selectedApplicant.questions.length > 0 && (
+                <div className="detail-section">
+                  <h3>질문 및 답변</h3>
+                  {selectedApplicant.questions.map((question) => (
+                    <div key={question.id} className="question-detail">
+                      <div className="question-header">
+                        <h4>질문 {question.id}</h4>
+                        <button 
+                          className="btn-icon"
+                          onClick={() => playVideo(question)}
+                        >
+                          <FiPlay />
+                        </button>
+                      </div>
+                      <div className="question-content">
+                        <p className="question-text">{question.question}</p>
+                        <p className="answer-text">{question.answer}</p>
+                      </div>
+                      {question.aiAnalysis && (
+                        <div className="ai-analysis-detail">
+                          <h5>AI 분석 결과</h5>
+                          <div className="analysis-scores">
+                            <div className="analysis-score">
+                              <span>표정</span>
+                              <div className="score-bar">
+                                <div 
+                                  className="score-fill" 
+                                  style={{ width: `${question.aiAnalysis.expression}%` }}
+                                ></div>
+                              </div>
+                              <span>{question.aiAnalysis.expression}%</span>
+                            </div>
+                            <div className="analysis-score">
+                              <span>목소리</span>
+                              <div className="score-bar">
+                                <div 
+                                  className="score-fill" 
+                                  style={{ width: `${question.aiAnalysis.voice}%` }}
+                                ></div>
+                              </div>
+                              <span>{question.aiAnalysis.voice}%</span>
+                            </div>
+                            <div className="analysis-score">
+                              <span>제스처</span>
+                              <div className="score-bar">
+                                <div 
+                                  className="score-fill" 
+                                  style={{ width: `${question.aiAnalysis.gesture}%` }}
+                                ></div>
+                              </div>
+                              <span>{question.aiAnalysis.gesture}%</span>
+                            </div>
+                          </div>
+                          <p className="analysis-summary">{question.aiAnalysis.summary}</p>
+                        </div>
+                      )}
+                    </div>
+                  ))}
+                </div>
+              )}
 
       {/* 지원자 그리드 */}
       <div 
@@ -1108,7 +1553,6 @@ const getStatusText = (status) => {
                   ))}
                 </div>
               )}
-
               {/* 평가 내역 */}
               {selectedApplicant.evaluation.overallScore > 0 && (
                 <div className="detail-section">
@@ -1623,6 +2067,7 @@ const getStatusText = (status) => {
                       <option value={2}>2명</option>
                       <option value={3}>3명</option>
                       <option value={4}>4명</option>
+                      {/* <option value={5}>5명</option> */}
                       <option value={6}>6명</option>
                     </select>
                   </div>
@@ -1690,6 +2135,19 @@ const getStatusText = (status) => {
           </div>
         </div>
       )}
+
+      {/* 캘린더 면접 일정 등록 모달 */}
+      <CalendarScheduleModal
+        isOpen={isCalendarScheduleModalOpen}
+        onClose={() => setIsCalendarScheduleModalOpen(false)}
+        selectedDate={selectedDate}
+        newSchedule={newSchedule}
+        setNewSchedule={setNewSchedule}
+        onSubmit={createCalendarSchedule}
+        getInterviewsForDate={getInterviewsForDate}
+        getStatusText={getStatusText}
+        applicants={applicants}
+      />
     </div>
   );
 };
