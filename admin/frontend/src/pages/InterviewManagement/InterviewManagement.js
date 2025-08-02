@@ -35,7 +35,6 @@ import {
   FiArchive,
   FiBarChart3,
   FiList
-  FiBarChart3
 } from 'react-icons/fi';
 
 // 지원자 데이터 샘플
@@ -336,6 +335,9 @@ const InterviewManagement = () => {
   const [currentDate, setCurrentDate] = useState(new Date());
   const [isCalendarScheduleModalOpen, setIsCalendarScheduleModalOpen] = useState(false);
   const [selectedDate, setSelectedDate] = useState('');
+  
+  // 자동조정 관련 상태
+  const [isAutoAdjust, setIsAutoAdjust] = useState(true); // 자동조정 여부
 
   // 콘텐츠 영역 크기 변경 감지
   useEffect(() => {
@@ -365,20 +367,22 @@ const InterviewManagement = () => {
 
   // 콘텐츠 영역 크기에 따른 자동 그리드 조정
   useEffect(() => {
-    let newGridSize = 4; // 기본값
-    
-    if (contentWidth < 600) {
-      newGridSize = 1; // 매우 작은 영역: 1명
-    } else if (contentWidth < 900) {
-      newGridSize = 2; // 작은 영역: 2명
-    } else if (contentWidth < 1100) {
-      newGridSize = 3; // 중간 영역: 3명
-    } else {
-      newGridSize = 4; // 큰 영역: 4명
+    if (isAutoAdjust) {
+      let newGridSize = 4; // 기본값
+      
+      if (contentWidth < 600) {
+        newGridSize = 1; // 매우 작은 영역: 1명
+      } else if (contentWidth < 900) {
+        newGridSize = 2; // 작은 영역: 2명
+      } else if (contentWidth < 1100) {
+        newGridSize = 3; // 중간 영역: 3명
+      } else {
+        newGridSize = 4; // 큰 영역: 4명
+      }
+      
+      setApplicantsPerRow(newGridSize);
     }
-    
-    setApplicantsPerRow(newGridSize);
-  }, [contentWidth]);
+  }, [contentWidth, isAutoAdjust]);
 
   // 키보드 단축키 처리
   useEffect(() => {
@@ -506,25 +510,6 @@ const InterviewManagement = () => {
       return;
     }
 
-  // 피드백 전송
-  const sendFeedback = (applicantId, feedbackData) => {
-    // 유효성 검사
-    if (!feedbackData.content.trim()) {
-      showNotification('피드백 내용을 입력해주세요.', 'error');
-      return;
-    }
-
-    if (!feedbackData.channel) {
-      showNotification('전송 채널을 선택해주세요.', 'error');
-      return;
-    }
-
-    // 결과가 선택되지 않은 경우
-    const applicant = applicants.find(a => a.id === applicantId);
-    if (applicant && applicant.evaluation.result === 'pending') {
-      showNotification('합격/불합격 결과를 먼저 선택해주세요.', 'error');
-      return;
-    }
     setApplicants(prev => prev.map(applicant => 
       applicant.id === applicantId 
         ? { ...applicant, feedback: { ...feedbackData, sent: true, sentAt: new Date().toLocaleString('ko-KR') } }
@@ -873,6 +858,7 @@ const getStatusText = (status) => {
           </div>
         ))}
       </div>
+
       {/* 헤더 */}
       <div className="header">
         <h1>면접자 관리</h1>
@@ -895,18 +881,14 @@ const getStatusText = (status) => {
           </div>
           {viewMode === 'grid' && (
             <div className="view-controls">
-              <span>콘텐츠 영역 크기에 따라 자동 조정</span>
+              <span>
+                {isAutoAdjust ? '자동 조정' : '수동 설정'}: {applicantsPerRow}명씩 표시
+              </span>
               <span className="current-view">
-                현재: {applicantsPerRow}명씩 표시 ({contentWidth}px)
+                ({contentWidth}px)
               </span>
             </div>
           )}
-          <div className="view-controls">
-            <span>콘텐츠 영역 크기에 따라 자동 조정</span>
-            <span className="current-view">
-              현재: {applicantsPerRow}명씩 표시 ({contentWidth}px)
-            </span>
-          </div>
           <button 
             className="btn btn-secondary"
             onClick={() => setIsSettingsModalOpen(true)}
@@ -1010,7 +992,7 @@ const getStatusText = (status) => {
                   <span className="label">면접유형:</span>
                   <span className="value">{applicant.type} ({applicant.platform})</span>
                 </div>
-                </div>
+              </div>
                 
               {/* AI 점수 */}
               {applicant.aiScore > 0 && (
@@ -1052,7 +1034,7 @@ const getStatusText = (status) => {
                   className="btn btn-primary"
                   onClick={() => {
                     setSelectedApplicant(applicant);
-                  setIsDetailModalOpen(true);
+                    setIsDetailModalOpen(true);
                   }}
                 >
                   <FiEye />
@@ -1063,7 +1045,7 @@ const getStatusText = (status) => {
                     className="btn btn-secondary"
                     onClick={() => downloadApplicantFiles(applicant)}
                   >
-                  <FiDownload />
+                    <FiDownload />
                     다운로드
                   </button>
                 )}
@@ -1089,957 +1071,7 @@ const getStatusText = (status) => {
         />
       )}
 
-      {/* 상세보기 모달 */}
-      {isDetailModalOpen && selectedApplicant && (
-        <div className="modal-overlay" onClick={() => setIsDetailModalOpen(false)}>
-          <div className="modal-content" onClick={(e) => e.stopPropagation()}>
-            <div className="modal-header">
-              <h2>{selectedApplicant.name} 상세정보</h2>
-              <button 
-                className="btn-icon"
-                onClick={() => setIsDetailModalOpen(false)}
-              >
-                <FiX />
-              </button>
-            </div>
-            <div className="modal-body">
-              {/* 상세 정보 내용 */}
-              <div className="detail-section">
-                <h3>기본 정보</h3>
-                <div className="detail-grid">
-                  <div className="detail-item">
-                    <span className="label">이름</span>
-                    <span className="value">{selectedApplicant.name}</span>
-                  </div>
-                  <div className="detail-item">
-                    <span className="label">지원 직무</span>
-                    <span className="value">{selectedApplicant.position}</span>
-                  </div>
-                  <div className="detail-item">
-                    <span className="label">이메일</span>
-                    <span className="value">{maskPersonalInfo(selectedApplicant.email)}</span>
-                  </div>
-                  <div className="detail-item">
-                    <span className="label">연락처</span>
-                    <span className="value">{maskPersonalInfo(selectedApplicant.phone)}</span>
-                  </div>
-                </div>
-              </div>
-
-              <div className="detail-section">
-                <h3>면접 정보</h3>
-                <div className="detail-grid">
-                  <div className="detail-item">
-                    <span className="label">면접 일시</span>
-                    <span className="value">{selectedApplicant.interviewDate} {selectedApplicant.interviewTime}</span>
-                  </div>
-                  <div className="detail-item">
-                    <span className="label">소요 시간</span>
-                    <span className="value">{selectedApplicant.duration}</span>
-                  </div>
-                  <div className="detail-item">
-                    <span className="label">면접 유형</span>
-                    <span className="value">{selectedApplicant.type}</span>
-                  </div>
-                  <div className="detail-item">
-                    <span className="label">플랫폼</span>
-                    <span className="value">{selectedApplicant.platform}</span>
-                  </div>
-                  <div className="detail-item">
-                    <span className="label">상태</span>
-                    <span className={`status-badge ${selectedApplicant.status}`}>
-                      {getStatusText(selectedApplicant.status)}
-                    </span>
-                  </div>
-                </div>
-              </div>
-
-              {/* 문서 정보 */}
-              <div className="detail-section">
-                <h3>제출 서류</h3>
-                <div className="detail-grid">
-                  <div className="detail-item">
-                    <span className="label">이력서</span>
-                    <span className="value">
-                      {selectedApplicant.documents.resume.exists ? (
-                        <button 
-                          className="btn-link"
-                          onClick={() => viewDocument({ type: 'resume', ...selectedApplicant.documents.resume })}
-                        >
-                          상세보기
-                        </button>
-                      ) : (
-                        <span className="no-document">제출 내역 없음</span>
-                      )}
-                    </span>
-                  </div>
-                  <div className="detail-item">
-                    <span className="label">포트폴리오</span>
-                    <span className="value">
-                      {selectedApplicant.documents.portfolio.exists ? (
-                        <button 
-                          className="btn-link"
-                          onClick={() => viewDocument({ type: 'portfolio', ...selectedApplicant.documents.portfolio })}
-                        >
-                          상세보기
-                        </button>
-                      ) : (
-                        <span className="no-document">제출 내역 없음</span>
-                      )}
-                    </span>
-                  </div>
-                  <div className="detail-item">
-                    <span className="label">자기소개서</span>
-                    <span className="value">
-                      {selectedApplicant.documents.coverLetter.exists ? (
-                        <button 
-                          className="btn-link"
-                          onClick={() => viewDocument({ type: 'coverLetter', ...selectedApplicant.documents.coverLetter })}
-                        >
-                          상세보기
-                        </button>
-                      ) : (
-                        <span className="no-document">제출 내역 없음</span>
-                      )}
-                    </span>
-                  </div>
-                </div>
-              </div>
-
-              {/* 질문 및 답변 */}
-              {selectedApplicant.questions.length > 0 && (
-                <div className="detail-section">
-                  <h3>질문 및 답변</h3>
-                  {selectedApplicant.questions.map((question) => (
-                    <div key={question.id} className="question-detail">
-                      <div className="question-header">
-                        <h4>질문 {question.id}</h4>
-                        <button 
-                          className="btn-icon"
-                          onClick={() => playVideo(question)}
-                        >
-                          <FiPlay />
-                        </button>
-                      </div>
-                      <div className="question-content">
-                        <p className="question-text">{question.question}</p>
-                        <p className="answer-text">{question.answer}</p>
-                      </div>
-                      {question.aiAnalysis && (
-                        <div className="ai-analysis-detail">
-                          <h5>AI 분석 결과</h5>
-                          <div className="analysis-scores">
-                            <div className="analysis-score">
-                              <span>표정</span>
-                              <div className="score-bar">
-                                <div 
-                                  className="score-fill" 
-                                  style={{ width: `${question.aiAnalysis.expression}%` }}
-                                ></div>
-                              </div>
-                              <span>{question.aiAnalysis.expression}%</span>
-                            </div>
-                            <div className="analysis-score">
-                              <span>목소리</span>
-                              <div className="score-bar">
-                                <div 
-                                  className="score-fill" 
-                                  style={{ width: `${question.aiAnalysis.voice}%` }}
-                                ></div>
-                              </div>
-                              <span>{question.aiAnalysis.voice}%</span>
-                            </div>
-                            <div className="analysis-score">
-                              <span>제스처</span>
-                              <div className="score-bar">
-                                <div 
-                                  className="score-fill" 
-                                  style={{ width: `${question.aiAnalysis.gesture}%` }}
-                                ></div>
-                              </div>
-                              <span>{question.aiAnalysis.gesture}%</span>
-                            </div>
-                          </div>
-                          <p className="analysis-summary">{question.aiAnalysis.summary}</p>
-                        </div>
-                      )}
-                    </div>
-                  ))}
-                </div>
-              )}
-
-      {/* 지원자 그리드 */}
-      <div 
-        className="applicants-grid"
-        style={{ 
-          gridTemplateColumns: `repeat(${applicantsPerRow}, 1fr)` 
-        }}
-      >
-        {filteredApplicants.map((applicant) => (
-          <div key={applicant.id} className="applicant-card">
-            {/* 지원자 헤더 */}
-            <div className="applicant-header">
-              <div className="applicant-info">
-                <h3 className="applicant-name">{applicant.name}</h3>
-                <p className="applicant-position">{applicant.position}</p>
-                <div className="applicant-contact">
-                  <span><FiMail /> {maskPersonalInfo(applicant.email)}</span>
-                  <span><FiPhone /> {maskPersonalInfo(applicant.phone)}</span>
-                </div>
-              </div>
-              <div className={`status-badge ${applicant.status}`}>
-                {getStatusText(applicant.status)}
-              </div>
-            </div>
-
-            {/* 면접 정보 */}
-            <div className="interview-info">
-              <div className="info-row">
-                <span className="label">면접일시:</span>
-                <span className="value">{applicant.interviewDate} {applicant.interviewTime}</span>
-              </div>
-              <div className="info-row">
-                <span className="label">소요시간:</span>
-                <span className="value">{applicant.duration}</span>
-              </div>
-              <div className="info-row">
-                <span className="label">면접유형:</span>
-                <span className="value">{applicant.type} ({applicant.platform})</span>
-              </div>
-              </div>
-              
-            {/* AI 점수 */}
-            {applicant.aiScore > 0 && (
-              <div className="ai-score">
-                <div className="score-header">
-                  <FiStar />
-                  <span>AI 면접 점수</span>
-                  <span className="score-value">{applicant.aiScore}점</span>
-                </div>
-                <div className="score-bar">
-                  <div className="score-fill" style={{ width: `${applicant.aiScore}%` }}></div>
-                </div>
-              </div>
-            )}
-
-            {/* 간단한 정보 요약 */}
-            <div className="info-summary">
-              <div className="summary-item">
-                <FiFileText />
-                <span>서류: {applicant.documents.resume.exists ? '제출' : '미제출'}</span>
-              </div>
-              {applicant.questions.length > 0 && (
-                <div className="summary-item">
-                  <FiVideo />
-                  <span>영상: {applicant.questions.length}개</span>
-                </div>
-              )}
-              {applicant.evaluation.overallScore > 0 && (
-                <div className="summary-item">
-                  <FiStar />
-                  <span>평가: {applicant.evaluation.overallScore}점</span>
-                </div>
-              )}
-            </div>
-
-            {/* 액션 버튼 */}
-            <div className="action-buttons">
-              <button 
-                className="btn btn-primary"
-                onClick={() => {
-                  setSelectedApplicant(applicant);
-                setIsDetailModalOpen(true);
-                }}
-              >
-                <FiEye />
-                상세보기
-              </button>
-              {applicant.questions.length > 0 && (
-                <button 
-                  className="btn btn-secondary"
-                  onClick={() => downloadApplicantFiles(applicant)}
-                >
-                <FiDownload />
-                  다운로드
-                </button>
-              )}
-              <button 
-                className="btn btn-secondary"
-                onClick={() => openFeedbackModal(applicant)}
-              >
-                <FiMessageSquare />
-                결과 전송
-              </button>
-            </div>
-          </div>
-        ))}
-      </div>
-
-      {/* 상세보기 모달 */}
-      {isDetailModalOpen && selectedApplicant && (
-        <div className="modal-overlay" onClick={() => setIsDetailModalOpen(false)}>
-          <div className="modal-content" onClick={(e) => e.stopPropagation()}>
-            <div className="modal-header">
-              <h2>{selectedApplicant.name} 상세정보</h2>
-              <button 
-                className="btn-icon"
-                onClick={() => setIsDetailModalOpen(false)}
-              >
-                <FiX />
-              </button>
-            </div>
-            <div className="modal-body">
-              {/* 상세 정보 내용 */}
-              <div className="detail-section">
-                <h3>기본 정보</h3>
-                <div className="detail-grid">
-                  <div className="detail-item">
-                    <span className="label">이름</span>
-                    <span className="value">{selectedApplicant.name}</span>
-                  </div>
-                  <div className="detail-item">
-                    <span className="label">지원 직무</span>
-                    <span className="value">{selectedApplicant.position}</span>
-                  </div>
-                  <div className="detail-item">
-                    <span className="label">이메일</span>
-                    <span className="value">{maskPersonalInfo(selectedApplicant.email)}</span>
-                  </div>
-                  <div className="detail-item">
-                    <span className="label">연락처</span>
-                    <span className="value">{maskPersonalInfo(selectedApplicant.phone)}</span>
-                  </div>
-                </div>
-              </div>
-
-              <div className="detail-section">
-                <h3>면접 정보</h3>
-                <div className="detail-grid">
-                  <div className="detail-item">
-                    <span className="label">면접 일시</span>
-                    <span className="value">{selectedApplicant.interviewDate} {selectedApplicant.interviewTime}</span>
-                  </div>
-                  <div className="detail-item">
-                    <span className="label">소요 시간</span>
-                    <span className="value">{selectedApplicant.duration}</span>
-                  </div>
-                  <div className="detail-item">
-                    <span className="label">면접 유형</span>
-                    <span className="value">{selectedApplicant.type}</span>
-                  </div>
-                  <div className="detail-item">
-                    <span className="label">플랫폼</span>
-                    <span className="value">{selectedApplicant.platform}</span>
-                  </div>
-                  <div className="detail-item">
-                    <span className="label">상태</span>
-                    <span className={`status-badge ${selectedApplicant.status}`}>
-                      {getStatusText(selectedApplicant.status)}
-                    </span>
-                  </div>
-                </div>
-              </div>
-
-              {/* 문서 정보 */}
-              <div className="detail-section">
-                <h3>제출 서류</h3>
-                <div className="detail-grid">
-                  <div className="detail-item">
-                    <span className="label">이력서</span>
-                    <span className="value">
-                      {selectedApplicant.documents.resume.exists ? (
-                        <button 
-                          className="btn-link"
-                          onClick={() => viewDocument({ type: 'resume', ...selectedApplicant.documents.resume })}
-                        >
-                          상세보기
-                        </button>
-                      ) : (
-                        <span className="no-document">제출 내역 없음</span>
-                      )}
-                    </span>
-                  </div>
-                  <div className="detail-item">
-                    <span className="label">포트폴리오</span>
-                    <span className="value">
-                      {selectedApplicant.documents.portfolio.exists ? (
-                        <button 
-                          className="btn-link"
-                          onClick={() => viewDocument({ type: 'portfolio', ...selectedApplicant.documents.portfolio })}
-                        >
-                          상세보기
-                        </button>
-                      ) : (
-                        <span className="no-document">제출 내역 없음</span>
-                      )}
-                    </span>
-                  </div>
-                  <div className="detail-item">
-                    <span className="label">자기소개서</span>
-                    <span className="value">
-                      {selectedApplicant.documents.coverLetter.exists ? (
-                        <button 
-                          className="btn-link"
-                          onClick={() => viewDocument({ type: 'coverLetter', ...selectedApplicant.documents.coverLetter })}
-                        >
-                          상세보기
-                        </button>
-                      ) : (
-                        <span className="no-document">제출 내역 없음</span>
-                      )}
-                    </span>
-                  </div>
-                </div>
-              </div>
-
-              {/* 질문 및 답변 */}
-              {selectedApplicant.questions.length > 0 && (
-                <div className="detail-section">
-                  <h3>질문 및 답변</h3>
-                  {selectedApplicant.questions.map((question) => (
-                    <div key={question.id} className="question-detail">
-                      <div className="question-header">
-                        <h4>질문 {question.id}</h4>
-                        <button 
-                          className="btn-icon"
-                          onClick={() => playVideo(question)}
-                        >
-                          <FiPlay />
-                        </button>
-                      </div>
-                      <div className="question-content">
-                        <p className="question-text">{question.question}</p>
-                        <p className="answer-text">{question.answer}</p>
-                      </div>
-                      {question.aiAnalysis && (
-                        <div className="ai-analysis-detail">
-                          <h5>AI 분석 결과</h5>
-                          <div className="analysis-scores">
-                            <div className="analysis-score">
-                              <span>표정</span>
-                              <div className="score-bar">
-                                <div 
-                                  className="score-fill" 
-                                  style={{ width: `${question.aiAnalysis.expression}%` }}
-                                ></div>
-                              </div>
-                              <span>{question.aiAnalysis.expression}%</span>
-                            </div>
-                            <div className="analysis-score">
-                              <span>목소리</span>
-                              <div className="score-bar">
-                                <div 
-                                  className="score-fill" 
-                                  style={{ width: `${question.aiAnalysis.voice}%` }}
-                                ></div>
-                              </div>
-                              <span>{question.aiAnalysis.voice}%</span>
-                            </div>
-                            <div className="analysis-score">
-                              <span>제스처</span>
-                              <div className="score-bar">
-                                <div 
-                                  className="score-fill" 
-                                  style={{ width: `${question.aiAnalysis.gesture}%` }}
-                                ></div>
-                              </div>
-                              <span>{question.aiAnalysis.gesture}%</span>
-                            </div>
-                          </div>
-                          <p className="analysis-summary">{question.aiAnalysis.summary}</p>
-                        </div>
-                      )}
-                    </div>
-                  ))}
-                </div>
-              )}
-              {/* 평가 내역 */}
-              {selectedApplicant.evaluation.overallScore > 0 && (
-                <div className="detail-section">
-                  <h3>평가 내역</h3>
-                  <div className="evaluation-detail">
-                    <div className="evaluation-chart">
-                      <div className="chart-item">
-                        <span>기술력</span>
-                        <div className="chart-bar">
-                          <div 
-                            className="chart-fill" 
-                            style={{ width: `${selectedApplicant.evaluation.technicalScore}%` }}
-                          ></div>
-                        </div>
-                        <span>{selectedApplicant.evaluation.technicalScore}%</span>
-                      </div>
-                      <div className="chart-item">
-                        <span>커뮤니케이션</span>
-                        <div className="chart-bar">
-                          <div 
-                            className="chart-fill" 
-                            style={{ width: `${selectedApplicant.evaluation.communicationScore}%` }}
-                          ></div>
-                        </div>
-                        <span>{selectedApplicant.evaluation.communicationScore}%</span>
-                      </div>
-                      <div className="chart-item">
-                        <span>문화적합성</span>
-                        <div className="chart-bar">
-                          <div 
-                            className="chart-fill" 
-                            style={{ width: `${selectedApplicant.evaluation.cultureScore}%` }}
-                          ></div>
-                        </div>
-                        <span>{selectedApplicant.evaluation.cultureScore}%</span>
-                      </div>
-                    </div>
-                    <div className="evaluation-memo">
-                      <h4>내부 메모</h4>
-                      <p>{selectedApplicant.evaluation.memo}</p>
-                    </div>
-                  </div>
-                </div>
-              )}
-            </div>
-          </div>
-        </div>
-      )}
-
-      {/* 영상 재생 모달 */}
-      {isVideoModalOpen && selectedVideo && (
-        <div className="modal-overlay" onClick={() => setIsVideoModalOpen(false)}>
-          <div className="modal-content video-modal" onClick={(e) => e.stopPropagation()}>
-            <div className="modal-header">
-              <h2>영상 재생</h2>
-              <button 
-                className="btn-icon"
-                onClick={() => setIsVideoModalOpen(false)}
-              >
-                <FiX />
-              </button>
-            </div>
-            <div className="modal-body">
-              <div className="video-player">
-                {videoLoading && (
-                  <div className="video-loading">
-                    <div className="loading-spinner"></div>
-                    <p>비디오를 로드하는 중...</p>
-                  </div>
-                )}
-                {videoError && (
-                  <div className="video-error">
-                    <FiAlertCircle />
-                    <p>{videoError}</p>
-                    <button 
-                      className="btn btn-secondary"
-                      onClick={() => playVideo(selectedVideo)}
-                    >
-                      다시 시도
-                    </button>
-                  </div>
-                )}
-                <video 
-                  ref={videoRef}
-                  controls
-                  onLoadedData={handleVideoLoad}
-                  onError={handleVideoError}
-                  style={{ display: videoLoading || videoError ? 'none' : 'block' }}
-                >
-                  <source src={selectedVideo.videoUrl} type="video/mp4" />
-                  브라우저가 비디오를 지원하지 않습니다.
-                </video>
-                <div className="video-controls">
-                  <button className="btn btn-secondary">
-                    <FiRotateCcw />
-                    반복 재생
-                  </button>
-                  <button className="btn btn-secondary">
-                    <FiVolume2 />
-                    속도 조절
-                  </button>
-                  <button className="btn btn-secondary">
-                    <FiEdit3 />
-                    메모 추가
-                  </button>
-                </div>
-                {selectedVideo.aiAnalysis && (
-                  <div className="video-analysis">
-                    <h4>AI 분석 결과</h4>
-                    <div className="analysis-detail">
-                      <div className="analysis-item">
-                        <span>표정 분석</span>
-                        <div className="analysis-bar">
-                          <div 
-                            className="analysis-fill" 
-                            style={{ width: `${selectedVideo.aiAnalysis.expression}%` }}
-                          ></div>
-                        </div>
-                        <span>{selectedVideo.aiAnalysis.expression}%</span>
-                      </div>
-                      <div className="analysis-item">
-                        <span>목소리 분석</span>
-                        <div className="analysis-bar">
-                          <div 
-                            className="analysis-fill" 
-                            style={{ width: `${selectedVideo.aiAnalysis.voice}%` }}
-                          ></div>
-                        </div>
-                        <span>{selectedVideo.aiAnalysis.voice}%</span>
-                      </div>
-                      <div className="analysis-item">
-                        <span>제스처 분석</span>
-                        <div className="analysis-bar">
-                          <div 
-                            className="analysis-fill" 
-                            style={{ width: `${selectedVideo.aiAnalysis.gesture}%` }}
-                          ></div>
-                        </div>
-                        <span>{selectedVideo.aiAnalysis.gesture}%</span>
-                      </div>
-                    </div>
-                    <p className="analysis-summary">{selectedVideo.aiAnalysis.summary}</p>
-                  </div>
-                )}
-              </div>
-            </div>
-          </div>
-        </div>
-      )}
-
-      {/* 문서 상세보기 모달 */}
-      {isDocumentModalOpen && selectedDocument && (
-        <div className="modal-overlay" onClick={() => setIsDocumentModalOpen(false)}>
-          <div className="modal-content document-modal" onClick={(e) => e.stopPropagation()}>
-            <div className="modal-header">
-              <h2>{selectedDocument.type === 'resume' ? '이력서' : 
-                   selectedDocument.type === 'portfolio' ? '포트폴리오' : '자기소개서'} 상세보기</h2>
-              <button 
-                className="btn-icon"
-                onClick={() => setIsDocumentModalOpen(false)}
-              >
-                <FiX />
-              </button>
-            </div>
-            <div className="modal-body">
-              <div className="document-content">
-                <div className="document-summary">
-                  <h4>요약</h4>
-                  <p>{selectedDocument.summary}</p>
-                </div>
-                <div className="document-keywords">
-                  <h4>주요 키워드</h4>
-                  <div className="keyword-tags">
-                    {selectedDocument.keywords.map((keyword, index) => (
-                      <span key={index} className="keyword-tag">{keyword}</span>
-                    ))}
-                  </div>
-                </div>
-                <div className="document-full">
-                  <h4>전문 내용</h4>
-                  <div className="document-text">
-                    {selectedDocument.content}
-                  </div>
-                </div>
-              </div>
-            </div>
-          </div>
-        </div>
-      )}
-
-      {/* 피드백 모달 */}
-      {isFeedbackModalOpen && selectedApplicant && (
-        <div className="modal-overlay" onClick={() => setIsFeedbackModalOpen(false)}>
-          <div className="modal-content feedback-modal" onClick={(e) => e.stopPropagation()}>
-            <div className="modal-header">
-              <h2>{selectedApplicant.name} 피드백 전송</h2>
-              <button 
-                className="btn-icon"
-                onClick={() => setIsFeedbackModalOpen(false)}
-              >
-                <FiX />
-              </button>
-            </div>
-            <div className="modal-body">
-              <div className="feedback-form">
-                <div className="form-group">
-                  <label>결과</label>
-                  <div className="result-buttons">
-                    <button 
-                      className={`btn ${selectedApplicant.evaluation.result === 'pass' ? 'btn-primary' : 'btn-secondary'}`}
-                      onClick={() => updateResult(selectedApplicant.id, 'pass')}
-                    >
-                      합격
-                    </button>
-                    <button 
-                      className={`btn ${selectedApplicant.evaluation.result === 'fail' ? 'btn-primary' : 'btn-secondary'}`}
-                      onClick={() => updateResult(selectedApplicant.id, 'fail')}
-                    >
-                      불합격
-                    </button>
-                  </div>
-                </div>
-                <div className="form-group">
-                  <label>전송 채널</label>
-                  <select 
-                    value={selectedApplicant.feedback.channel}
-                    onChange={(e) => {
-                      const updatedApplicant = { 
-                        ...selectedApplicant, 
-                        feedback: { ...selectedApplicant.feedback, channel: e.target.value } 
-                      };
-                      setSelectedApplicant(updatedApplicant);
-                      setApplicants(prev => prev.map(applicant => 
-                        applicant.id === selectedApplicant.id 
-                          ? updatedApplicant
-                          : applicant
-                      ));
-                    }}
-                  >
-                    <option value="email">이메일</option>
-                    <option value="sms">문자</option>
-                  </select>
-                </div>
-                <div className="form-group">
-                  <label>피드백 내용</label>
-                  <textarea 
-                    value={selectedApplicant.feedback.content}
-                    onChange={(e) => {
-                      const updatedApplicant = { 
-                        ...selectedApplicant, 
-                        feedback: { ...selectedApplicant.feedback, content: e.target.value } 
-                      };
-                      setSelectedApplicant(updatedApplicant);
-                      setApplicants(prev => prev.map(applicant => 
-                        applicant.id === selectedApplicant.id 
-                          ? updatedApplicant
-                          : applicant
-                      ));
-                    }}
-                    placeholder="피드백 내용을 입력하세요..."
-                    rows={6}
-                  />
-                </div>
-                <div className="feedback-guide">
-                  <h4>피드백 가이드</h4>
-                  <div className="guide-buttons">
-                    <button 
-                      className="btn-link"
-                      onClick={() => {
-                        const isEmail = selectedApplicant.feedback.channel === 'email';
-                        
-                        const defaultPassMessage = isEmail ? 
-                          `안녕하세요, ${selectedApplicant.name}님!
-
-🎉 합격을 축하드립니다! 🎉
-
-저희와 함께 할 수 있게 되어 매우 기쁩니다. 면접에서 보여주신 전문성과 열정이 깊은 인상을 남겼습니다.
-
-📋 다음 단계 안내:
-• 입사 관련 서류 및 세부 일정은 별도 연락을 통해 안내드리겠습니다
-• 궁금한 사항이 있으시면 언제든 연락해 주세요
-
-다시 한번 합격을 축하드리며, 함께 성장해 나갈 수 있기를 기대합니다.
-
-감사합니다.` : 
-                          `🎉 ${selectedApplicant.name}님, 합격을 축하드립니다! 입사 관련 세부사항은 이메일로 별도 안내드리겠습니다. 감사합니다.`;
-                        
-                        const updatedApplicant = { 
-                          ...selectedApplicant, 
-                          feedback: { ...selectedApplicant.feedback, content: defaultPassMessage } 
-                        };
-                        setSelectedApplicant(updatedApplicant);
-                        setApplicants(prev => prev.map(applicant => 
-                          applicant.id === selectedApplicant.id 
-                            ? updatedApplicant
-                            : applicant
-                        ));
-                      }}
-                    >
-                      합격 기본 메시지 ({selectedApplicant.feedback.channel === 'email' ? '이메일용' : '문자용'})
-                    </button>
-                    <button 
-                      className="btn-link"
-                      onClick={() => {
-                        const isEmail = selectedApplicant.feedback.channel === 'email';
-                        
-                        const defaultFailMessage = isEmail ? 
-                          `안녕하세요, ${selectedApplicant.name}님.
-
-면접에 참여해 주셔서 진심으로 감사드립니다.
-
-신중한 검토 결과, 아쉽게도 이번 기회에는 함께하지 못하게 되었음을 알려드립니다. 이는 ${selectedApplicant.name}님의 역량 부족이 아닌, 현재 저희가 찾고 있는 포지션과의 적합성을 종합적으로 고려한 결과입니다.
-
-💪 앞으로의 응원 메시지:
-• 면접에서 보여주신 열정과 노력을 높이 평가합니다
-• 더 좋은 기회에서 ${selectedApplicant.name}님의 역량을 발휘하실 수 있기를 바랍니다
-• 향후 다른 포지션에서 기회가 있다면 다시 연락드릴 수도 있습니다
-
-소중한 시간을 내어 면접에 참여해 주신 점 다시 한번 감사드리며, ${selectedApplicant.name}님의 앞날에 좋은 일들이 가득하기를 진심으로 응원합니다.
-
-감사합니다.` : 
-                          `${selectedApplicant.name}님, 면접에 참여해 주셔서 감사합니다. 아쉽게도 이번에는 함께하지 못하게 되었습니다. 좋은 기회가 있기를 바랍니다.`;
-                        
-                        const updatedApplicant = { 
-                          ...selectedApplicant, 
-                          feedback: { ...selectedApplicant.feedback, content: defaultFailMessage } 
-                        };
-                        setSelectedApplicant(updatedApplicant);
-                        setApplicants(prev => prev.map(applicant => 
-                          applicant.id === selectedApplicant.id 
-                            ? updatedApplicant
-                            : applicant
-                        ));
-                      }}
-                    >
-                      불합격 기본 메시지 ({selectedApplicant.feedback.channel === 'email' ? '이메일용' : '문자용'})
-                    </button>
-                  </div>
-                </div>
-                <div className="form-actions">
-                  <button 
-                    className="btn btn-primary"
-                    onClick={() => sendFeedback(selectedApplicant.id, selectedApplicant.feedback)}
-                  >
-                    <FiSend />
-                    피드백 전송
-                  </button>
-                  <button 
-                    className="btn btn-secondary"
-                    onClick={() => setIsFeedbackModalOpen(false)}
-                  >
-                    취소
-                  </button>
-                </div>
-              </div>
-            </div>
-          </div>
-        </div>
-      )}
-
-      {/* 면접 일정 등록 모달 */}
-      {isScheduleModalOpen && (
-        <div className="modal-overlay" onClick={() => setIsScheduleModalOpen(false)}>
-          <div className="modal-content schedule-modal" onClick={(e) => e.stopPropagation()}>
-            <div className="modal-header">
-              <h2>면접 일정 등록</h2>
-              <button 
-                className="btn-icon"
-                onClick={() => setIsScheduleModalOpen(false)}
-              >
-                <FiX />
-              </button>
-            </div>
-            <div className="modal-body">
-              <div className="schedule-form">
-                <div className="form-row">
-                  <div className="form-group">
-                    <label>지원자 이름 *</label>
-                    <input
-                      type="text"
-                      value={newSchedule.name}
-                      onChange={(e) => setNewSchedule(prev => ({ ...prev, name: e.target.value }))}
-                      placeholder="지원자 이름을 입력하세요"
-                    />
-                  </div>
-                  <div className="form-group">
-                    <label>지원 직무 *</label>
-                    <input
-                      type="text"
-                      value={newSchedule.position}
-                      onChange={(e) => setNewSchedule(prev => ({ ...prev, position: e.target.value }))}
-                      placeholder="지원 직무를 입력하세요"
-                    />
-                  </div>
-                </div>
-                <div className="form-row">
-                  <div className="form-group">
-                    <label>이메일 *</label>
-                    <input
-                      type="email"
-                      value={newSchedule.email}
-                      onChange={(e) => setNewSchedule(prev => ({ ...prev, email: e.target.value }))}
-                      placeholder="이메일을 입력하세요"
-                    />
-                  </div>
-                  <div className="form-group">
-                    <label>연락처 *</label>
-                    <input
-                      type="tel"
-                      value={newSchedule.phone}
-                      onChange={(e) => setNewSchedule(prev => ({ ...prev, phone: e.target.value }))}
-                      placeholder="010-0000-0000"
-                    />
-                  </div>
-                </div>
-                <div className="form-row">
-                  <div className="form-group">
-                    <label>면접 날짜 *</label>
-                    <input
-                      type="date"
-                      value={newSchedule.interviewDate}
-                      onChange={(e) => setNewSchedule(prev => ({ ...prev, interviewDate: e.target.value }))}
-                    />
-                  </div>
-                  <div className="form-group">
-                    <label>면접 시간 *</label>
-                    <input
-                      type="time"
-                      value={newSchedule.interviewTime}
-                      onChange={(e) => setNewSchedule(prev => ({ ...prev, interviewTime: e.target.value }))}
-                    />
-                  </div>
-                </div>
-                <div className="form-row">
-                  <div className="form-group">
-                    <label>소요 시간</label>
-                    <select
-                      value={newSchedule.duration}
-                      onChange={(e) => setNewSchedule(prev => ({ ...prev, duration: e.target.value }))}
-                    >
-                      <option value="30분">30분</option>
-                      <option value="60분">60분</option>
-                      <option value="90분">90분</option>
-                      <option value="120분">120분</option>
-                    </select>
-                  </div>
-                  <div className="form-group">
-                    <label>면접 유형</label>
-                    <select
-                      value={newSchedule.type}
-                      onChange={(e) => setNewSchedule(prev => ({ ...prev, type: e.target.value }))}
-                    >
-                      <option value="비대면">비대면</option>
-                      <option value="대면">대면</option>
-                    </select>
-                  </div>
-                </div>
-                <div className="form-group">
-                  <label>플랫폼/장소</label>
-                  <input
-                    type="text"
-                    value={newSchedule.platform}
-                    onChange={(e) => setNewSchedule(prev => ({ ...prev, platform: e.target.value }))}
-                    placeholder="Zoom, Teams, 회사 면접실 등"
-                  />
-                </div>
-                <div className="form-actions">
-                  <button 
-                    className="btn btn-primary"
-                    onClick={createSchedule}
-                  >
-                    <FiCalendar />
-                    일정 등록
-                  </button>
-                  <button 
-                    className="btn btn-secondary"
-                    onClick={() => setIsScheduleModalOpen(false)}
-                  >
-                    취소
-                  </button>
-                </div>
-              </div>
-            </div>
-          </div>
-        </div>
-      )}
-
+      {/* 여기에 모든 모달들이 들어감 */}
       {/* 설정 모달 */}
       {isSettingsModalOpen && (
         <div className="modal-overlay" onClick={() => setIsSettingsModalOpen(false)}>
@@ -2060,17 +1092,34 @@ const getStatusText = (status) => {
                   <div className="form-group">
                     <label>한 줄에 표시할 지원자 수</label>
                     <select
-                      value={applicantsPerRow}
-                      onChange={(e) => setApplicantsPerRow(Number(e.target.value))}
+                      value={isAutoAdjust ? 'auto' : applicantsPerRow}
+                      onChange={(e) => {
+                        if (e.target.value === 'auto') {
+                          setIsAutoAdjust(true);
+                        } else {
+                          setIsAutoAdjust(false);
+                          setApplicantsPerRow(Number(e.target.value));
+                        }
+                      }}
                     >
-                      <option value={1}>1명</option>
-                      <option value={2}>2명</option>
-                      <option value={3}>3명</option>
-                      <option value={4}>4명</option>
-                      {/* <option value={5}>5명</option> */}
-                      <option value={6}>6명</option>
+                      <option value="auto">자동 조정 (화면 크기에 따라)</option>
+                      <option value={1}>1명 (수동 설정)</option>
+                      <option value={2}>2명 (수동 설정)</option>
+                      <option value={3}>3명 (수동 설정)</option>
+                      <option value={4}>4명 (수동 설정)</option>
+                      <option value={6}>6명 (수동 설정)</option>
                     </select>
                   </div>
+                  {isAutoAdjust && (
+                    <div className="auto-adjust-info">
+                      <small>
+                        • 600px 미만: 1명씩 표시<br/>
+                        • 600px~900px: 2명씩 표시<br/>
+                        • 900px~1100px: 3명씩 표시<br/>
+                        • 1100px 이상: 4명씩 표시
+                      </small>
+                    </div>
+                  )}
                 </div>
                 <div className="settings-section">
                   <h3>알림 설정</h3>
@@ -2152,4 +1201,4 @@ const getStatusText = (status) => {
   );
 };
 
-export default InterviewManagement; 
+export default InterviewManagement;
