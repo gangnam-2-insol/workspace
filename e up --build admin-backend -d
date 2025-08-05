@@ -1,0 +1,21 @@
+warning: in the working copy of 'admin/backend/Dockerfile', LF will be replaced by CRLF the next time Git touches it
+warning: in the working copy of 'admin/backend/main.py', LF will be replaced by CRLF the next time Git touches it
+warning: in the working copy of 'admin/backend/requirements.txt', LF will be replaced by CRLF the next time Git touches it
+warning: in the working copy of 'admin/frontend/src/pages/TalentRecommendation/TalentRecommendation.js', LF will be replaced by CRLF the next time Git touches it
+warning: in the working copy of 'client/frontend/package.json', LF will be replaced by CRLF the next time Git touches it
+admin/backend/Dockerfile
+admin/backend/__pycache__/main.cpython-311.pyc
+admin/backend/main.py
+admin/backend/requirements.txt
+admin/database/init/init.js
+admin/frontend/src/pages/TalentRecommendation/TalentRecommendation.js
+client/backend/Dockerfile
+client/backend/__pycache__/main.cpython-311.pyc
+client/backend/main.py
+client/frontend/package-lock.json
+client/frontend/package.json
+client/frontend/src/App.css
+client/frontend/src/components/Footer.css
+client/frontend/src/pages/Recommendations.css
+client/frontend/src/pages/Recommendations.tsx
+package-lock.json
