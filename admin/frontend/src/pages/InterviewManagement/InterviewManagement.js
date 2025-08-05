@@ -1254,13 +1254,13 @@ const getStatusText = (status) => {
               <FiUser />
               임시 합격자 등록
             </button>
-            <button 
+            {/* <button 
               className="btn btn-secondary"
               onClick={() => setIsAIScheduleModalOpen(true)}
             >
               <FiSettings />
               AI 자동 스케줄링
-            </button>
+            </button> */}
             <button 
               className="btn btn-secondary"
               onClick={() => setIsSettingsModalOpen(true)}
@@ -1279,6 +1279,7 @@ const getStatusText = (status) => {
             className={`btn ${isAILoading ? 'btn-secondary' : 'btn-primary'}`}
             onClick={() => {
               if (aiScheduler) {
+                setIsAIScheduleModalOpen(true)
                 showNotification('AI 자동 스케줄링이 활성화되었습니다.', 'success');
               } else {
                 showNotification('AI 스케줄러를 초기화 중입니다.', 'info');
