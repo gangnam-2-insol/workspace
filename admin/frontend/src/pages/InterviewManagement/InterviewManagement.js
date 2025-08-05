@@ -2,6 +2,8 @@ import React, { useState, useEffect, useRef } from 'react';
 import './InterviewManagement.css';
 import InterviewCalendarView from './components/InterviewCalendarView';
 import CalendarScheduleModal from './components/CalendarScheduleModal';
+import AIScheduler from './ai/aiScheduler.js';
+import InterviewAPI from './api/interviewAPI.js';
 import { 
   FiVideo, 
   FiCalendar, 
@@ -37,95 +39,97 @@ import {
   FiList
 } from 'react-icons/fi';
 
-// 지원자 데이터 샘플
-const applicantsData = [
-  {
-    id: 1,
-    name: '김철수',
-    position: '프론트엔드 개발자',
-    email: 'kim***@gmail.com',
-    phone: '010-****-1234',
-    interviewDate: '2024-01-20',
-    interviewTime: '14:00',
-    duration: '60분',
-    status: 'scheduled',
-    type: '비대면',
-    platform: 'Zoom',
-    aiScore: 85,
-    documents: {
-      resume: {
-        exists: true,
-        summary: 'React, TypeScript, Next.js 경험 풍부. 3년간 프론트엔드 개발 경력. 주요 프로젝트: 이커머스 플랫폼 구축, 관리자 대시보드 개발.',
-        keywords: ['React', 'TypeScript', 'Next.js', 'Redux', 'Tailwind CSS'],
-        content: '상세 이력서 내용...'
-      },
-      portfolio: {
-        exists: true,
-        summary: 'GitHub에 15개 이상의 프로젝트 포트폴리오 보유. 반응형 웹 디자인, PWA 개발 경험.',
-        keywords: ['GitHub', 'PWA', '반응형', 'UI/UX'],
-        content: '포트폴리오 상세 내용...'
-      },
-      coverLetter: {
-        exists: false,
-        summary: '',
-        keywords: [],
-        content: ''
-      }
-    },
-    questions: [
-      {
-        id: 1,
-        question: 'React와 Vue.js의 차이점에 대해 설명해주세요',
-        answer: 'React는 컴포넌트 기반 라이브러리이고, Vue.js는 프레임워크입니다. React는 JSX를 사용하고, Vue는 템플릿 문법을 사용합니다.',
-        videoUrl: '/videos/interview1_q1.mp4',
-        aiAnalysis: {
-          expression: 85,
-          voice: 90,
-          gesture: 78,
-          summary: '자신감 있게 답변하며, 적절한 제스처를 사용했습니다.'
+  // 서류 합격자 데이터 샘플
+  const applicantsData = [
+    {
+      id: 1,
+      name: '김철수',
+      position: '프론트엔드 개발자',
+      email: 'kim***@gmail.com',
+      phone: '010-****-1234',
+      interviewDate: '2024-01-20',
+      interviewTime: '14:00',
+      duration: '60분',
+      status: 'scheduled',
+      type: '대면',
+      platform: '회사 면접실',
+      aiScore: 85,
+      documentStatus: 'pass', // 서류 합격 상태
+      documents: {
+        resume: {
+          exists: true,
+          summary: 'React, TypeScript, Next.js 경험 풍부. 3년간 프론트엔드 개발 경력. 주요 프로젝트: 이커머스 플랫폼 구축, 관리자 대시보드 개발.',
+          keywords: ['React', 'TypeScript', 'Next.js', 'Redux', 'Tailwind CSS'],
+          content: '상세 이력서 내용...'
+        },
+        portfolio: {
+          exists: true,
+          summary: 'GitHub에 15개 이상의 프로젝트 포트폴리오 보유. 반응형 웹 디자인, PWA 개발 경험.',
+          keywords: ['GitHub', 'PWA', '반응형', 'UI/UX'],
+          content: '포트폴리오 상세 내용...'
+        },
+        coverLetter: {
+          exists: false,
+          summary: '',
+          keywords: [],
+          content: ''
         }
       },
-      {
-        id: 2,
-        question: '상태 관리 라이브러리 사용 경험을 말씀해주세요',
-        answer: 'Redux와 Zustand를 사용한 경험이 있습니다. Redux는 큰 규모의 프로젝트에서, Zustand는 작은 프로젝트에서 주로 사용했습니다.',
-        videoUrl: '/videos/interview1_q2.mp4',
-        aiAnalysis: {
-          expression: 88,
-          voice: 85,
-          gesture: 82,
-          summary: '구체적인 경험을 바탕으로 한 답변으로 신뢰도가 높습니다.'
+      questions: [
+        {
+          id: 1,
+          question: 'React와 Vue.js의 차이점에 대해 설명해주세요',
+          answer: 'React는 컴포넌트 기반 라이브러리이고, Vue.js는 프레임워크입니다. React는 JSX를 사용하고, Vue는 템플릿 문법을 사용합니다.',
+          videoUrl: '/videos/interview1_q1.mp4',
+          aiAnalysis: {
+            expression: 85,
+            voice: 90,
+            gesture: 78,
+            summary: '자신감 있게 답변하며, 적절한 제스처를 사용했습니다.'
+          }
+        },
+        {
+          id: 2,
+          question: '상태 관리 라이브러리 사용 경험을 말씀해주세요',
+          answer: 'Redux와 Zustand를 사용한 경험이 있습니다. Redux는 큰 규모의 프로젝트에서, Zustand는 작은 프로젝트에서 주로 사용했습니다.',
+          videoUrl: '/videos/interview1_q2.mp4',
+          aiAnalysis: {
+            expression: 88,
+            voice: 85,
+            gesture: 82,
+            summary: '구체적인 경험을 바탕으로 한 답변으로 신뢰도가 높습니다.'
+          }
         }
+      ],
+      evaluation: {
+        technicalScore: 85,
+        communicationScore: 88,
+        cultureScore: 82,
+        overallScore: 85,
+        memo: '기술적 이해도가 높고, 커뮤니케이션 능력도 우수합니다.',
+        result: 'pending' // pending, pass, fail
+      },
+      feedback: {
+        sent: false,
+        content: '',
+        channel: 'email',
+        sentAt: null
       }
-    ],
-    evaluation: {
-      technicalScore: 85,
-      communicationScore: 88,
-      cultureScore: 82,
-      overallScore: 85,
-      memo: '기술적 이해도가 높고, 커뮤니케이션 능력도 우수합니다.',
-      result: 'pending' // pending, pass, fail
     },
-    feedback: {
-      sent: false,
-      content: '',
-      channel: 'email',
-      sentAt: null
-    }
-  },
-  {
-    id: 2,
-    name: '이영희',
-    position: '백엔드 개발자',
-    email: 'lee***@naver.com',
-    phone: '010-****-5678',
-    interviewDate: '2024-01-19',
-    interviewTime: '15:30',
-    duration: '90분',
-    status: 'completed',
-    type: '대면',
-    platform: '회사 면접실',
-    aiScore: 92,
+      {
+      id: 2,
+      name: '이영희',
+      position: '백엔드 개발자',
+      email: 'lee***@naver.com',
+      phone: '010-****-5678',
+      interviewDate: '2024-01-19',
+      interviewTime: '15:30',
+      duration: '90분',
+      status: 'completed',
+      type: '대면',
+      platform: '회사 면접실',
+      aiScore: 92,
+      documentStatus: 'pass', // 서류 합격 상태
     documents: {
       resume: {
         exists: true,
@@ -175,19 +179,20 @@ const applicantsData = [
       sentAt: '2024-01-19 17:30'
     }
   },
-  {
-    id: 3,
-    name: '박민수',
-    position: 'UI/UX 디자이너',
-    email: 'park***@daum.net',
-    phone: '010-****-9012',
-    interviewDate: '2024-01-21',
-    interviewTime: '10:00',
-    duration: '60분',
-    status: 'in-progress',
-    type: '비대면',
-    platform: 'Teams',
-    aiScore: 78,
+      {
+      id: 3,
+      name: '박민수',
+      position: 'UI/UX 디자이너',
+      email: 'park***@daum.net',
+      phone: '010-****-9012',
+      interviewDate: '2024-01-21',
+      interviewTime: '10:00',
+      duration: '60분',
+      status: 'in-progress',
+      type: '대면',
+      platform: '회사 면접실',
+      aiScore: 78,
+      documentStatus: 'pass', // 서류 합격 상태
     documents: {
       resume: {
         exists: true,
@@ -237,19 +242,20 @@ const applicantsData = [
       sentAt: null
     }
   },
-  {
-    id: 4,
-    name: '최지영',
-    position: '데이터 분석가',
-    email: 'choi***@gmail.com',
-    phone: '010-****-3456',
-    interviewDate: '2024-01-22',
-    interviewTime: '16:00',
-    duration: '60분',
-    status: 'scheduled',
-    type: '비대면',
-    platform: 'Zoom',
-    aiScore: 0,
+      {
+      id: 4,
+      name: '최지영',
+      position: '데이터 분석가',
+      email: 'choi***@gmail.com',
+      phone: '010-****-3456',
+      interviewDate: '2024-01-22',
+      interviewTime: '16:00',
+      duration: '60분',
+      status: 'scheduled',
+      type: '대면',
+      platform: '회사 면접실',
+      aiScore: 0,
+      documentStatus: 'pass', // 서류 합격 상태
     documents: {
       resume: {
         exists: true,
@@ -317,6 +323,21 @@ const InterviewManagement = () => {
   const contentRef = useRef(null);
   const [isScheduleModalOpen, setIsScheduleModalOpen] = useState(false);
   const [isSettingsModalOpen, setIsSettingsModalOpen] = useState(false);
+  const [isTemporaryPassModalOpen, setIsTemporaryPassModalOpen] = useState(false);
+  const [isInterviewScheduleModalOpen, setIsInterviewScheduleModalOpen] = useState(false);
+  const [selectedApplicantForSchedule, setSelectedApplicantForSchedule] = useState(null);
+  const [isAIScheduleModalOpen, setIsAIScheduleModalOpen] = useState(false);
+  const [aiScheduleSettings, setAIScheduleSettings] = useState({
+    startDate: '',
+    endDate: '',
+    workingHours: {
+      start: '09:00',
+      end: '18:00'
+    },
+    interviewDuration: '60',
+    breakTime: '30',
+    maxInterviewsPerDay: '8'
+  });
   const [newSchedule, setNewSchedule] = useState({
     name: '',
     position: '',
@@ -325,19 +346,37 @@ const InterviewManagement = () => {
     interviewDate: '',
     interviewTime: '',
     duration: '60분',
-    type: '비대면',
-    platform: 'Zoom'
+    type: '대면',
+    platform: '회사 면접실'
+  });
+  const [newTemporaryPass, setNewTemporaryPass] = useState({
+    name: '',
+    position: '',
+    email: '',
+    phone: '',
+    experience: '',
+    skills: '',
+    education: '',
+    notes: ''
   });
   const [notifications, setNotifications] = useState([]);
   
   // 캘린더 관련 상태
-  const [viewMode, setViewMode] = useState('grid'); // 'grid' or 'calendar'
+  const [viewMode, setViewMode] = useState('calendar'); // 'grid' or 'calendar'
   const [currentDate, setCurrentDate] = useState(new Date());
   const [isCalendarScheduleModalOpen, setIsCalendarScheduleModalOpen] = useState(false);
   const [selectedDate, setSelectedDate] = useState('');
   
   // 자동조정 관련 상태
   const [isAutoAdjust, setIsAutoAdjust] = useState(true); // 자동조정 여부
+  
+  // AI 스케줄러 관련 상태
+  const [aiScheduler, setAiScheduler] = useState(null);
+  const [isAILoading, setIsAILoading] = useState(false);
+  
+  // API 관련 상태
+  const [interviewAPI, setInterviewAPI] = useState(null);
+  const [isAPILoading, setIsAPILoading] = useState(false);
 
   // 콘텐츠 영역 크기 변경 감지
   useEffect(() => {
@@ -368,21 +407,62 @@ const InterviewManagement = () => {
   // 콘텐츠 영역 크기에 따른 자동 그리드 조정
   useEffect(() => {
     if (isAutoAdjust) {
-      let newGridSize = 4; // 기본값
-      
-      if (contentWidth < 600) {
-        newGridSize = 1; // 매우 작은 영역: 1명
-      } else if (contentWidth < 900) {
-        newGridSize = 2; // 작은 영역: 2명
-      } else if (contentWidth < 1100) {
-        newGridSize = 3; // 중간 영역: 3명
-      } else {
-        newGridSize = 4; // 큰 영역: 4명
-      }
-      
-      setApplicantsPerRow(newGridSize);
+    let newGridSize = 4; // 기본값
+    
+    if (contentWidth < 600) {
+      newGridSize = 1; // 매우 작은 영역: 1명
+    } else if (contentWidth < 900) {
+      newGridSize = 2; // 작은 영역: 2명
+    } else if (contentWidth < 1100) {
+      newGridSize = 3; // 중간 영역: 3명
+    } else {
+      newGridSize = 4; // 큰 영역: 4명
+    }
+    
+    setApplicantsPerRow(newGridSize);
     }
   }, [contentWidth, isAutoAdjust]);
+
+  // AI 스케줄러 및 API 초기화
+  useEffect(() => {
+    const initializeServices = async () => {
+      try {
+        // AI 스케줄러 초기화
+        const scheduler = new AIScheduler();
+        const aiSuccess = await scheduler.initialize();
+        if (aiSuccess) {
+          setAiScheduler(scheduler);
+          console.log('AI 스케줄러 초기화 성공');
+        } else {
+          console.error('AI 스케줄러 초기화 실패');
+        }
+
+        // API 초기화
+        const api = new InterviewAPI();
+        const apiSuccess = await api.initialize();
+        if (apiSuccess) {
+          setInterviewAPI(api);
+          console.log('Interview API 초기화 성공');
+        } else {
+          console.error('Interview API 초기화 실패');
+        }
+      } catch (error) {
+        console.error('서비스 초기화 오류:', error);
+      }
+    };
+
+    initializeServices();
+
+    // 컴포넌트 언마운트 시 정리
+    return () => {
+      if (aiScheduler) {
+        aiScheduler.cleanup();
+      }
+      if (interviewAPI) {
+        interviewAPI.cleanup();
+      }
+    };
+  }, []);
 
   // 키보드 단축키 처리
   useEffect(() => {
@@ -401,6 +481,13 @@ const InterviewManagement = () => {
         } else if (isFeedbackModalOpen) {
           setIsFeedbackModalOpen(false);
           setSelectedApplicant(null);
+        } else if (isTemporaryPassModalOpen) {
+          setIsTemporaryPassModalOpen(false);
+        } else if (isInterviewScheduleModalOpen) {
+          setIsInterviewScheduleModalOpen(false);
+          setSelectedApplicantForSchedule(null);
+        } else if (isAIScheduleModalOpen) {
+          setIsAIScheduleModalOpen(false);
         }
       }
       
@@ -418,12 +505,15 @@ const InterviewManagement = () => {
     return () => {
       document.removeEventListener('keydown', handleKeyDown);
     };
-  }, [isDetailModalOpen, isVideoModalOpen, isDocumentModalOpen, isFeedbackModalOpen]);
+  }, [isDetailModalOpen, isVideoModalOpen, isDocumentModalOpen, isFeedbackModalOpen, isTemporaryPassModalOpen, isInterviewScheduleModalOpen, isAIScheduleModalOpen]);
 
   // 데이터 변경 시 로컬 스토리지에 저장
   useEffect(() => {
     try {
       localStorage.setItem('interviewManagement_applicants', JSON.stringify(applicants));
+      // 다른 컴포넌트에 데이터 업데이트 알림
+      window.dispatchEvent(new CustomEvent('applicantsUpdated'));
+      console.log('Management: 데이터 저장 완료', applicants.length, '명의 지원자');
     } catch (error) {
       console.error('Failed to save data to localStorage:', error);
     }
@@ -438,8 +528,11 @@ const InterviewManagement = () => {
     averageScore: Math.round(applicants.filter(a => a.aiScore > 0).reduce((sum, a) => sum + a.aiScore, 0) / applicants.filter(a => a.aiScore > 0).length) || 0
   };
 
-  // 필터링된 지원자 목록
-  const filteredApplicants = applicants.filter(applicant => {
+  // 서류 합격자만 필터링
+  const passedApplicants = applicants.filter(applicant => applicant.documentStatus === 'pass');
+  
+  // 필터링된 지원자 목록 (서류 합격자 중에서)
+  const filteredApplicants = passedApplicants.filter(applicant => {
     const matchesSearch = applicant.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
                          applicant.position.toLowerCase().includes(searchTerm.toLowerCase());
     const matchesStatus = statusFilter === 'all' || applicant.status === statusFilter;
@@ -701,10 +794,176 @@ const InterviewManagement = () => {
       interviewDate: '',
       interviewTime: '',
       duration: '60분',
-      type: '비대면',
-      platform: 'Zoom'
+      type: '대면',
+      platform: '회사 면접실'
     });
     showNotification('면접 일정이 성공적으로 등록되었습니다.');
+  };
+
+  // 기존 지원자 면접일정 등록
+  const createInterviewSchedule = () => {
+    // 유효성 검사
+    if (!newSchedule.interviewDate) {
+      showNotification('면접 날짜를 선택해주세요.', 'error');
+      return;
+    }
+    if (!newSchedule.interviewTime) {
+      showNotification('면접 시간을 선택해주세요.', 'error');
+      return;
+    }
+
+    // 기존 지원자 정보 업데이트
+    setApplicants(prev => prev.map(applicant => 
+      applicant.id === selectedApplicantForSchedule.id 
+        ? { 
+            ...applicant, 
+            interviewDate: newSchedule.interviewDate,
+            interviewTime: newSchedule.interviewTime,
+            duration: newSchedule.duration,
+            status: 'scheduled',
+            type: newSchedule.type,
+            platform: newSchedule.platform
+          }
+        : applicant
+    ));
+
+    setIsInterviewScheduleModalOpen(false);
+    setSelectedApplicantForSchedule(null);
+    // 폼 초기화
+    setNewSchedule({
+      name: '',
+      position: '',
+      email: '',
+      phone: '',
+      interviewDate: '',
+      interviewTime: '',
+      duration: '60분',
+      type: '대면',
+      platform: '회사 면접실'
+    });
+    showNotification('면접 일정이 성공적으로 등록되었습니다.');
+  };
+
+  // 면접일정 등록 모달 열기
+  const openInterviewScheduleModal = (applicant) => {
+    setSelectedApplicantForSchedule(applicant);
+    setNewSchedule(prev => ({ 
+      ...prev, 
+      name: applicant.name,
+      position: applicant.position,
+      email: applicant.email,
+      phone: applicant.phone
+    }));
+    setIsInterviewScheduleModalOpen(true);
+  };
+
+  // AI 자동 스케줄링 실행
+  const executeAIScheduling = () => {
+    // 유효성 검사
+    if (!aiScheduleSettings.startDate) {
+      showNotification('시작 날짜를 선택해주세요.', 'error');
+      return;
+    }
+    if (!aiScheduleSettings.endDate) {
+      showNotification('종료 날짜를 선택해주세요.', 'error');
+      return;
+    }
+    if (new Date(aiScheduleSettings.startDate) > new Date(aiScheduleSettings.endDate)) {
+      showNotification('시작 날짜가 종료 날짜보다 늦을 수 없습니다.', 'error');
+      return;
+    }
+
+    // 면접 일정이 없는 지원자들 필터링
+    const unscheduledApplicants = applicants.filter(applicant => 
+      !applicant.interviewDate || applicant.interviewDate === ''
+    );
+
+    if (unscheduledApplicants.length === 0) {
+      showNotification('스케줄링할 면접자가 없습니다.', 'info');
+      return;
+    }
+
+    // AI 스케줄링 로직 실행
+    const scheduledApplicants = generateAISchedule(unscheduledApplicants, aiScheduleSettings);
+    
+    // 기존 지원자 목록 업데이트
+    setApplicants(prev => prev.map(applicant => {
+      const scheduled = scheduledApplicants.find(s => s.id === applicant.id);
+      return scheduled ? { ...applicant, ...scheduled } : applicant;
+    }));
+
+    setIsAIScheduleModalOpen(false);
+    showNotification(`${scheduledApplicants.length}명의 면접 일정이 AI에 의해 자동 스케줄링되었습니다.`);
+  };
+
+  // AI 스케줄링 알고리즘
+  const generateAISchedule = (unscheduledApplicants, settings) => {
+    const scheduledApplicants = [];
+    const startDate = new Date(settings.startDate);
+    const endDate = new Date(settings.endDate);
+    const workingStart = settings.workingHours.start;
+    const workingEnd = settings.workingHours.end;
+    const interviewDuration = parseInt(settings.interviewDuration);
+    const breakTime = parseInt(settings.breakTime);
+    const maxInterviewsPerDay = parseInt(settings.maxInterviewsPerDay);
+
+    let currentDate = new Date(startDate);
+    let currentTime = new Date(`2000-01-01T${workingStart}`);
+    let interviewsToday = 0;
+
+    for (const applicant of unscheduledApplicants) {
+      // 날짜가 범위를 벗어나면 중단
+      if (currentDate > endDate) {
+        break;
+      }
+
+      // 하루 최대 면접 수 초과 시 다음 날로 이동
+      if (interviewsToday >= maxInterviewsPerDay) {
+        currentDate.setDate(currentDate.getDate() + 1);
+        currentTime = new Date(`2000-01-01T${workingStart}`);
+        interviewsToday = 0;
+      }
+
+      // 주말 제외 (토요일: 6, 일요일: 0)
+      while (currentDate.getDay() === 0 || currentDate.getDay() === 6) {
+        currentDate.setDate(currentDate.getDate() + 1);
+        if (currentDate > endDate) {
+          break;
+        }
+      }
+
+      if (currentDate > endDate) {
+        break;
+      }
+
+      // 시간 형식 변환
+      const timeString = currentTime.toTimeString().slice(0, 5);
+      const dateString = currentDate.toISOString().split('T')[0];
+
+      // 지원자 정보 업데이트
+      scheduledApplicants.push({
+        id: applicant.id,
+        interviewDate: dateString,
+        interviewTime: timeString,
+        duration: `${interviewDuration}분`,
+        status: 'scheduled',
+        type: '대면',
+        platform: '회사 면접실'
+      });
+
+      // 다음 면접 시간 계산
+      currentTime.setMinutes(currentTime.getMinutes() + interviewDuration + breakTime);
+      interviewsToday++;
+
+      // 근무 시간 초과 시 다음 날로 이동
+      if (currentTime.toTimeString().slice(0, 5) >= workingEnd) {
+        currentDate.setDate(currentDate.getDate() + 1);
+        currentTime = new Date(`2000-01-01T${workingStart}`);
+        interviewsToday = 0;
+      }
+    }
+
+    return scheduledApplicants;
   };
 
   // 개인정보 마스킹
@@ -752,6 +1011,33 @@ const getStatusText = (status) => {
     setIsCalendarScheduleModalOpen(true);
   };
 
+  // AI 자동 스케줄링
+  const autoScheduleWithAI = async (applicantData) => {
+    if (!aiScheduler) {
+      showNotification('AI 스케줄러가 초기화되지 않았습니다.', 'error');
+      return null;
+    }
+
+    setIsAILoading(true);
+    try {
+      const result = await aiScheduler.autoScheduleInterview(applicantData);
+      
+      if (result.success) {
+        showNotification(`AI가 추천한 시간: ${result.scheduledTime}`, 'success');
+        return result.scheduledTime;
+      } else {
+        showNotification('AI 스케줄링에 실패했습니다.', 'error');
+        return null;
+      }
+    } catch (error) {
+      console.error('AI 스케줄링 오류:', error);
+      showNotification('AI 스케줄링 중 오류가 발생했습니다.', 'error');
+      return null;
+    } finally {
+      setIsAILoading(false);
+    }
+  };
+
   const createCalendarSchedule = () => {
     // 유효성 검사
     if (!newSchedule.name.trim()) {
@@ -770,27 +1056,122 @@ const getStatusText = (status) => {
       showNotification('연락처를 입력해주세요.', 'error');
       return;
     }
-    if (!newSchedule.interviewTime) {
-      showNotification('면접 시간을 선택해주세요.', 'error');
+
+    // AI 자동 스케줄링 시도
+    const scheduleWithAI = async () => {
+      const aiScheduledTime = await autoScheduleWithAI({
+        name: newSchedule.name,
+        position: newSchedule.position,
+        preferredDate: newSchedule.interviewDate
+      });
+
+      // AI가 추천한 시간이 있으면 사용, 없으면 사용자가 입력한 시간 사용
+      const finalTime = aiScheduledTime || newSchedule.interviewTime;
+      
+      if (!finalTime) {
+        showNotification('면접 시간을 선택해주세요.', 'error');
+        return;
+      }
+
+      // 새 지원자 생성
+      const newApplicant = {
+        id: Math.max(...applicants.map(a => a.id)) + 1,
+        name: newSchedule.name,
+        position: newSchedule.position,
+        email: newSchedule.email,
+        phone: newSchedule.phone,
+        interviewDate: newSchedule.interviewDate,
+        interviewTime: finalTime,
+        duration: newSchedule.duration,
+        status: 'scheduled',
+        type: newSchedule.type,
+        platform: newSchedule.platform,
+        aiScore: 0,
+        documents: {
+          resume: { exists: false, summary: '', keywords: [], content: '' },
+          portfolio: { exists: false, summary: '', keywords: [], content: '' },
+          coverLetter: { exists: false, summary: '', keywords: [], content: '' }
+        },
+        questions: [],
+        evaluation: {
+          technicalScore: 0,
+          communicationScore: 0,
+          cultureScore: 0,
+          overallScore: 0,
+          memo: '',
+          result: 'pending'
+        },
+        feedback: {
+          sent: false,
+          content: '',
+          channel: 'email',
+          sentAt: null
+        }
+      };
+
+      setApplicants(prev => [...prev, newApplicant]);
+      setIsCalendarScheduleModalOpen(false);
+      // 폼 초기화
+      setNewSchedule({
+        name: '',
+        position: '',
+        email: '',
+        phone: '',
+        interviewDate: '',
+        interviewTime: '',
+        duration: '60분',
+        type: '대면',
+        platform: '회사 면접실'
+      });
+      setSelectedDate('');
+      showNotification('면접 일정이 성공적으로 등록되었습니다.');
+    };
+
+    scheduleWithAI();
+  };
+
+  // 임시 합격자 등록
+  const createTemporaryPass = () => {
+    // 유효성 검사
+    if (!newTemporaryPass.name.trim()) {
+      showNotification('지원자 이름을 입력해주세요.', 'error');
+      return;
+    }
+    if (!newTemporaryPass.position.trim()) {
+      showNotification('지원 직무를 입력해주세요.', 'error');
+      return;
+    }
+    if (!newTemporaryPass.email.trim()) {
+      showNotification('이메일을 입력해주세요.', 'error');
+      return;
+    }
+    if (!newTemporaryPass.phone.trim()) {
+      showNotification('연락처를 입력해주세요.', 'error');
       return;
     }
 
-    // 새 지원자 생성
+    // 새 임시 합격자 생성
     const newApplicant = {
       id: Math.max(...applicants.map(a => a.id)) + 1,
-      name: newSchedule.name,
-      position: newSchedule.position,
-      email: newSchedule.email,
-      phone: newSchedule.phone,
-      interviewDate: newSchedule.interviewDate,
-      interviewTime: newSchedule.interviewTime,
-      duration: newSchedule.duration,
+      name: newTemporaryPass.name,
+      position: newTemporaryPass.position,
+      email: newTemporaryPass.email,
+      phone: newTemporaryPass.phone,
+      interviewDate: '',
+      interviewTime: '',
+      duration: '',
       status: 'scheduled',
-      type: newSchedule.type,
-      platform: newSchedule.platform,
+      type: '',
+      platform: '',
       aiScore: 0,
+      documentStatus: 'pass', // 서류 합격 상태로 설정
       documents: {
-        resume: { exists: false, summary: '', keywords: [], content: '' },
+        resume: { 
+          exists: true, 
+          summary: newTemporaryPass.experience || '임시 등록된 지원자',
+          keywords: newTemporaryPass.skills ? newTemporaryPass.skills.split(',').map(s => s.trim()) : [],
+          content: `경력: ${newTemporaryPass.experience || '없음'}\n기술: ${newTemporaryPass.skills || '없음'}\n학력: ${newTemporaryPass.education || '없음'}\n메모: ${newTemporaryPass.notes || '없음'}`
+        },
         portfolio: { exists: false, summary: '', keywords: [], content: '' },
         coverLetter: { exists: false, summary: '', keywords: [], content: '' }
       },
@@ -800,7 +1181,7 @@ const getStatusText = (status) => {
         communicationScore: 0,
         cultureScore: 0,
         overallScore: 0,
-        memo: '',
+        memo: newTemporaryPass.notes || '',
         result: 'pending'
       },
       feedback: {
@@ -812,21 +1193,19 @@ const getStatusText = (status) => {
     };
 
     setApplicants(prev => [...prev, newApplicant]);
-    setIsCalendarScheduleModalOpen(false);
+    setIsTemporaryPassModalOpen(false);
     // 폼 초기화
-    setNewSchedule({
+    setNewTemporaryPass({
       name: '',
       position: '',
       email: '',
       phone: '',
-      interviewDate: '',
-      interviewTime: '',
-      duration: '60분',
-      type: '비대면',
-      platform: 'Zoom'
+      experience: '',
+      skills: '',
+      education: '',
+      notes: ''
     });
-    setSelectedDate('');
-    showNotification('면접 일정이 성공적으로 등록되었습니다.');
+    showNotification('임시 합격자가 성공적으로 등록되었습니다.');
   };
 
   return (
@@ -861,41 +1240,34 @@ const getStatusText = (status) => {
 
       {/* 헤더 */}
       <div className="header">
-        <h1>면접자 관리</h1>
+        <h1>서류 합격자 관리</h1>
         <div className="header-actions">
-          <div className="view-mode-toggle">
-            <button 
-              className={`btn ${viewMode === 'grid' ? 'btn-primary' : 'btn-secondary'}`}
-              onClick={() => setViewMode('grid')}
-            >
-              <FiList />
-              목록형
-            </button>
-            <button 
-              className={`btn ${viewMode === 'calendar' ? 'btn-primary' : 'btn-secondary'}`}
-              onClick={() => setViewMode('calendar')}
-            >
-              <FiCalendar />
-              캘린더형
-            </button>
+          <div className="view-controls">
+            <span>
+              서류 합격자 목록 - 면접 일정 관리
+            </span>
           </div>
-          {viewMode === 'grid' && (
-            <div className="view-controls">
-              <span>
-                {isAutoAdjust ? '자동 조정' : '수동 설정'}: {applicantsPerRow}명씩 표시
-              </span>
-              <span className="current-view">
-                ({contentWidth}px)
-              </span>
-            </div>
-          )}
-          <button 
-            className="btn btn-secondary"
-            onClick={() => setIsSettingsModalOpen(true)}
-          >
-            <FiSettings />
-            설정
-          </button>
+                      <button 
+              className="btn btn-secondary"
+              onClick={() => setIsTemporaryPassModalOpen(true)}
+            >
+              <FiUser />
+              임시 합격자 등록
+            </button>
+            <button 
+              className="btn btn-secondary"
+              onClick={() => setIsAIScheduleModalOpen(true)}
+            >
+              <FiSettings />
+              AI 자동 스케줄링
+            </button>
+            <button 
+              className="btn btn-secondary"
+              onClick={() => setIsSettingsModalOpen(true)}
+            >
+              <FiSettings />
+              설정
+            </button>
           <button 
             className="btn btn-primary"
             onClick={() => setIsScheduleModalOpen(true)}
@@ -903,11 +1275,30 @@ const getStatusText = (status) => {
             <FiCalendar />
             면접 일정 등록
           </button>
+          <button 
+            className={`btn ${isAILoading ? 'btn-secondary' : 'btn-primary'}`}
+            onClick={() => {
+              if (aiScheduler) {
+                showNotification('AI 자동 스케줄링이 활성화되었습니다.', 'success');
+              } else {
+                showNotification('AI 스케줄러를 초기화 중입니다.', 'info');
+              }
+            }}
+            disabled={isAILoading}
+          >
+            <FiStar />
+            {isAILoading ? 'AI 처리 중...' : 'AI 자동 스케줄링'}
+          </button>
+
         </div>
       </div>
 
       {/* 통계 카드 */}
       <div className="stats-grid">
+        <div className="stat-card">
+          <div className="stat-value">{passedApplicants.length}</div>
+          <div className="stat-label">서류 합격자</div>
+        </div>
         <div className="stat-card">
           <div className="stat-value">{stats.scheduled}</div>
           <div className="stat-label">예정된 면접</div>
@@ -919,10 +1310,6 @@ const getStatusText = (status) => {
         <div className="stat-card">
           <div className="stat-value">{stats.completed}</div>
           <div className="stat-label">완료된 면접</div>
-        </div>
-        <div className="stat-card">
-          <div className="stat-value">{stats.averageScore}</div>
-          <div className="stat-label">평균 점수</div>
         </div>
       </div>
 
@@ -952,124 +1339,106 @@ const getStatusText = (status) => {
         </div>
       </div>
 
-      {/* 뷰 모드에 따른 컨텐츠 렌더링 */}
-      {viewMode === 'grid' ? (
-        /* 지원자 그리드 */
-        <div 
-          className="applicants-grid"
-          style={{ 
-            gridTemplateColumns: `repeat(${applicantsPerRow}, 1fr)` 
-          }}
-        >
-          {filteredApplicants.map((applicant) => (
-            <div key={applicant.id} className="applicant-card">
-              {/* 지원자 헤더 */}
-              <div className="applicant-header">
-                <div className="applicant-info">
-                  <h3 className="applicant-name">{applicant.name}</h3>
-                  <p className="applicant-position">{applicant.position}</p>
-                  <div className="applicant-contact">
-                    <span><FiMail /> {maskPersonalInfo(applicant.email)}</span>
-                    <span><FiPhone /> {maskPersonalInfo(applicant.phone)}</span>
-                  </div>
-                </div>
-                <div className={`status-badge ${applicant.status}`}>
-                  {getStatusText(applicant.status)}
+      {/* 캘린더 뷰 */}
+      {/* 서류 합격자 목록 */}
+      <div className="applicants-grid">
+        {filteredApplicants.map((applicant) => (
+          <div key={applicant.id} className="applicant-card">
+            {/* 지원자 헤더 */}
+            <div className="applicant-header">
+              <div className="applicant-info">
+                <h3 className="applicant-name">{applicant.name}</h3>
+                <p className="applicant-position">{applicant.position}</p>
+                <div className="applicant-contact">
+                  <span><FiMail /> {maskPersonalInfo(applicant.email)}</span>
+                  <span><FiPhone /> {maskPersonalInfo(applicant.phone)}</span>
                 </div>
               </div>
-
-              {/* 면접 정보 */}
-              <div className="interview-info">
-                <div className="info-row">
-                  <span className="label">면접일시:</span>
-                  <span className="value">{applicant.interviewDate} {applicant.interviewTime}</span>
-                </div>
-                <div className="info-row">
-                  <span className="label">소요시간:</span>
-                  <span className="value">{applicant.duration}</span>
-                </div>
-                <div className="info-row">
-                  <span className="label">면접유형:</span>
-                  <span className="value">{applicant.type} ({applicant.platform})</span>
-                </div>
-              </div>
-                
-              {/* AI 점수 */}
-              {applicant.aiScore > 0 && (
-                <div className="ai-score">
-                  <div className="score-header">
-                    <FiStar />
-                    <span>AI 면접 점수</span>
-                    <span className="score-value">{applicant.aiScore}점</span>
-                  </div>
-                  <div className="score-bar">
-                    <div className="score-fill" style={{ width: `${applicant.aiScore}%` }}></div>
-                  </div>
-                </div>
-              )}
-
-              {/* 간단한 정보 요약 */}
-              <div className="info-summary">
-                <div className="summary-item">
-                  <FiFileText />
-                  <span>서류: {applicant.documents.resume.exists ? '제출' : '미제출'}</span>
-                </div>
-                {applicant.questions.length > 0 && (
-                  <div className="summary-item">
-                    <FiVideo />
-                    <span>영상: {applicant.questions.length}개</span>
-                  </div>
-                )}
-                {applicant.evaluation.overallScore > 0 && (
-                  <div className="summary-item">
-                    <FiStar />
-                    <span>평가: {applicant.evaluation.overallScore}점</span>
-                  </div>
-                )}
-              </div>
-
-              {/* 액션 버튼 */}
-              <div className="action-buttons">
-                <button 
-                  className="btn btn-primary"
-                  onClick={() => {
-                    setSelectedApplicant(applicant);
-                    setIsDetailModalOpen(true);
-                  }}
-                >
-                  <FiEye />
-                  상세보기
-                </button>
-                {applicant.questions.length > 0 && (
-                  <button 
-                    className="btn btn-secondary"
-                    onClick={() => downloadApplicantFiles(applicant)}
-                  >
-                    <FiDownload />
-                    다운로드
-                  </button>
-                )}
-                <button 
-                  className="btn btn-secondary"
-                  onClick={() => openFeedbackModal(applicant)}
-                >
-                  <FiMessageSquare />
-                  결과 전송
-                </button>
+              <div className={`status-badge ${applicant.status}`}>
+                {getStatusText(applicant.status)}
               </div>
             </div>
-          ))}
-        </div>
-      ) : (
-        /* 캘린더 뷰 */
-        <InterviewCalendarView
-          currentDate={currentDate}
-          applicants={applicants}
-          navigateMonth={navigateMonth}
-          openCalendarScheduleModal={openCalendarScheduleModal}
-          getStatusText={getStatusText}
-        />
-      )}
+
+            {/* 면접 정보 */}
+            <div className="interview-info">
+              <div className="info-row">
+                <span className="label">면접일시:</span>
+                <span className="value">{applicant.interviewDate} {applicant.interviewTime}</span>
+              </div>
+              <div className="info-row">
+                <span className="label">소요시간:</span>
+                <span className="value">{applicant.duration}</span>
+              </div>
+              <div className="info-row">
+                <span className="label">면접유형:</span>
+                <span className="value">{applicant.type} ({applicant.platform})</span>
+              </div>
+            </div>
+              
+            {/* AI 점수 */}
+            {applicant.aiScore > 0 && (
+              <div className="ai-score">
+                <div className="score-header">
+                  <FiStar />
+                  <span>AI 면접 점수</span>
+                  <span className="score-value">{applicant.aiScore}점</span>
+                </div>
+                <div className="score-bar">
+                  <div className="score-fill" style={{ width: `${applicant.aiScore}%` }}></div>
+                </div>
+              </div>
+            )}
+
+            {/* 간단한 정보 요약 */}
+            <div className="info-summary">
+              <div className="summary-item">
+                <FiFileText />
+                <span>서류: {applicant.documents.resume.exists ? '제출' : '미제출'}</span>
+              </div>
+              {applicant.questions.length > 0 && (
+                <div className="summary-item">
+                  <FiVideo />
+                  <span>영상: {applicant.questions.length}개</span>
+                </div>
+              )}
+              {applicant.evaluation.overallScore > 0 && (
+                <div className="summary-item">
+                  <FiStar />
+                  <span>평가: {applicant.evaluation.overallScore}점</span>
+                </div>
+              )}
+            </div>
+
+            {/* 액션 버튼 */}
+            <div className="action-buttons">
+              <button 
+                className="btn btn-primary"
+                onClick={() => {
+                  setSelectedApplicant(applicant);
+                  setIsDetailModalOpen(true);
+                }}
+              >
+                <FiEye />
+                상세보기
+              </button>
+              <button 
+                className="btn btn-secondary"
+                onClick={() => openInterviewScheduleModal(applicant)}
+              >
+                <FiCalendar />
+                면접일정
+              </button>
+              <button 
+                className="btn btn-secondary"
+                onClick={() => openFeedbackModal(applicant)}
+              >
+                <FiMessageSquare />
+                결과 전송
+              </button>
+            </div>
+          </div>
+        ))}
+      </div>
 
       {/* 여기에 모든 모달들이 들어감 */}
       {/* 설정 모달 */}
@@ -1185,6 +1554,373 @@ const getStatusText = (status) => {
         </div>
       )}
 
+      {/* 임시 합격자 등록 모달 */}
+      {isTemporaryPassModalOpen && (
+        <div className="modal-overlay" onClick={() => setIsTemporaryPassModalOpen(false)}>
+          <div className="modal-content" onClick={(e) => e.stopPropagation()}>
+            <div className="modal-header">
+              <h2>임시 합격자 등록</h2>
+              <button 
+                className="btn-icon"
+                onClick={() => setIsTemporaryPassModalOpen(false)}
+              >
+                <FiX />
+              </button>
+            </div>
+            <div className="modal-body">
+              <div className="form-group">
+                <label>지원자 이름 *</label>
+                <input
+                  type="text"
+                  value={newTemporaryPass.name}
+                  onChange={(e) => setNewTemporaryPass(prev => ({ ...prev, name: e.target.value }))}
+                  placeholder="지원자 이름을 입력하세요"
+                />
+              </div>
+              <div className="form-group">
+                <label>지원 직무 *</label>
+                <input
+                  type="text"
+                  value={newTemporaryPass.position}
+                  onChange={(e) => setNewTemporaryPass(prev => ({ ...prev, position: e.target.value }))}
+                  placeholder="예: 프론트엔드 개발자"
+                />
+              </div>
+              <div className="form-group">
+                <label>이메일 *</label>
+                <input
+                  type="email"
+                  value={newTemporaryPass.email}
+                  onChange={(e) => setNewTemporaryPass(prev => ({ ...prev, email: e.target.value }))}
+                  placeholder="example@email.com"
+                />
+              </div>
+              <div className="form-group">
+                <label>연락처 *</label>
+                <input
+                  type="tel"
+                  value={newTemporaryPass.phone}
+                  onChange={(e) => setNewTemporaryPass(prev => ({ ...prev, phone: e.target.value }))}
+                  placeholder="010-0000-0000"
+                />
+              </div>
+              <div className="form-group">
+                <label>경력</label>
+                <textarea
+                  value={newTemporaryPass.experience}
+                  onChange={(e) => setNewTemporaryPass(prev => ({ ...prev, experience: e.target.value }))}
+                  placeholder="주요 경력 사항을 입력하세요"
+                  rows="3"
+                />
+              </div>
+              <div className="form-group">
+                <label>기술 스택</label>
+                <input
+                  type="text"
+                  value={newTemporaryPass.skills}
+                  onChange={(e) => setNewTemporaryPass(prev => ({ ...prev, skills: e.target.value }))}
+                  placeholder="예: React, TypeScript, Node.js (쉼표로 구분)"
+                />
+              </div>
+              <div className="form-group">
+                <label>학력</label>
+                <input
+                  type="text"
+                  value={newTemporaryPass.education}
+                  onChange={(e) => setNewTemporaryPass(prev => ({ ...prev, education: e.target.value }))}
+                  placeholder="예: 서울대학교 컴퓨터공학과"
+                />
+              </div>
+              <div className="form-group">
+                <label>메모</label>
+                <textarea
+                  value={newTemporaryPass.notes}
+                  onChange={(e) => setNewTemporaryPass(prev => ({ ...prev, notes: e.target.value }))}
+                  placeholder="추가 메모 사항을 입력하세요"
+                  rows="3"
+                />
+              </div>
+              <div className="form-actions">
+                <button 
+                  className="btn btn-primary"
+                  onClick={createTemporaryPass}
+                >
+                  <FiUser />
+                  임시 합격자 등록
+                </button>
+                <button 
+                  className="btn btn-secondary"
+                  onClick={() => setIsTemporaryPassModalOpen(false)}
+                >
+                  취소
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* AI 자동 스케줄링 모달 */}
+      {isAIScheduleModalOpen && (
+        <div className="modal-overlay" onClick={() => setIsAIScheduleModalOpen(false)}>
+          <div className="modal-content" onClick={(e) => e.stopPropagation()}>
+            <div className="modal-header">
+              <h2>AI 자동 스케줄링</h2>
+              <button 
+                className="btn-icon"
+                onClick={() => setIsAIScheduleModalOpen(false)}
+              >
+                <FiX />
+              </button>
+            </div>
+            <div className="modal-body">
+              <div className="ai-schedule-info">
+                <h3>스케줄링 설정</h3>
+                <p>면접 일정이 없는 지원자들을 지정된 기간 내에서 자동으로 스케줄링합니다.</p>
+              </div>
+              
+              <div className="form-group">
+                <label>시작 날짜 *</label>
+                <input
+                  type="date"
+                  value={aiScheduleSettings.startDate}
+                  onChange={(e) => setAIScheduleSettings(prev => ({ 
+                    ...prev, 
+                    startDate: e.target.value 
+                  }))}
+                  min={new Date().toISOString().split('T')[0]}
+                />
+              </div>
+              
+              <div className="form-group">
+                <label>종료 날짜 *</label>
+                <input
+                  type="date"
+                  value={aiScheduleSettings.endDate}
+                  onChange={(e) => setAIScheduleSettings(prev => ({ 
+                    ...prev, 
+                    endDate: e.target.value 
+                  }))}
+                  min={aiScheduleSettings.startDate || new Date().toISOString().split('T')[0]}
+                />
+              </div>
+
+              <div className="form-row">
+                <div className="form-group">
+                  <label>근무 시작 시간</label>
+                  <input
+                    type="time"
+                    value={aiScheduleSettings.workingHours.start}
+                    onChange={(e) => setAIScheduleSettings(prev => ({ 
+                      ...prev, 
+                      workingHours: { ...prev.workingHours, start: e.target.value }
+                    }))}
+                  />
+                </div>
+                <div className="form-group">
+                  <label>근무 종료 시간</label>
+                  <input
+                    type="time"
+                    value={aiScheduleSettings.workingHours.end}
+                    onChange={(e) => setAIScheduleSettings(prev => ({ 
+                      ...prev, 
+                      workingHours: { ...prev.workingHours, end: e.target.value }
+                    }))}
+                  />
+                </div>
+              </div>
+
+              <div className="form-row">
+                <div className="form-group">
+                  <label>면접 소요시간 (분)</label>
+                  <select
+                    value={aiScheduleSettings.interviewDuration}
+                    onChange={(e) => setAIScheduleSettings(prev => ({ 
+                      ...prev, 
+                      interviewDuration: e.target.value 
+                    }))}
+                  >
+                    <option value="30">30분</option>
+                    <option value="60">60분</option>
+                    <option value="90">90분</option>
+                    <option value="120">120분</option>
+                  </select>
+                </div>
+                <div className="form-group">
+                  <label>면접 간 휴식시간 (분)</label>
+                  <select
+                    value={aiScheduleSettings.breakTime}
+                    onChange={(e) => setAIScheduleSettings(prev => ({ 
+                      ...prev, 
+                      breakTime: e.target.value 
+                    }))}
+                  >
+                    <option value="15">15분</option>
+                    <option value="30">30분</option>
+                    <option value="45">45분</option>
+                    <option value="60">60분</option>
+                  </select>
+                </div>
+              </div>
+
+              <div className="form-group">
+                <label>하루 최대 면접 수</label>
+                <select
+                  value={aiScheduleSettings.maxInterviewsPerDay}
+                  onChange={(e) => setAIScheduleSettings(prev => ({ 
+                    ...prev, 
+                    maxInterviewsPerDay: e.target.value 
+                  }))}
+                >
+                  <option value="4">4명</option>
+                  <option value="6">6명</option>
+                  <option value="8">8명</option>
+                  <option value="10">10명</option>
+                  <option value="12">12명</option>
+                </select>
+              </div>
+
+              <div className="ai-schedule-preview">
+                <h4>스케줄링 대상</h4>
+                <div className="unscheduled-applicants">
+                  {applicants.filter(a => !a.interviewDate || a.interviewDate === '').map(applicant => (
+                    <div key={applicant.id} className="applicant-item">
+                      <span className="name">{applicant.name}</span>
+                      <span className="position">({applicant.position})</span>
+                    </div>
+                  ))}
+                </div>
+                {applicants.filter(a => !a.interviewDate || a.interviewDate === '').length === 0 && (
+                  <p className="no-applicants">스케줄링할 면접자가 없습니다.</p>
+                )}
+              </div>
+
+              <div className="form-actions">
+                <button 
+                  className="btn btn-primary"
+                  onClick={executeAIScheduling}
+                  disabled={applicants.filter(a => !a.interviewDate || a.interviewDate === '').length === 0}
+                >
+                  <FiSettings />
+                  AI 스케줄링 실행
+                </button>
+                <button 
+                  className="btn btn-secondary"
+                  onClick={() => setIsAIScheduleModalOpen(false)}
+                >
+                  취소
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* 면접일정 등록 모달 */}
+      {isInterviewScheduleModalOpen && selectedApplicantForSchedule && (
+        <div className="modal-overlay" onClick={() => setIsInterviewScheduleModalOpen(false)}>
+          <div className="modal-content" onClick={(e) => e.stopPropagation()}>
+            <div className="modal-header">
+              <h2>면접일정 등록</h2>
+              <button 
+                className="btn-icon"
+                onClick={() => setIsInterviewScheduleModalOpen(false)}
+              >
+                <FiX />
+              </button>
+            </div>
+            <div className="modal-body">
+              <div className="applicant-info">
+                <h3>지원자 정보</h3>
+                <div className="info-grid">
+                  <div className="info-item">
+                    <label>이름:</label>
+                    <span>{selectedApplicantForSchedule.name}</span>
+                  </div>
+                  <div className="info-item">
+                    <label>직무:</label>
+                    <span>{selectedApplicantForSchedule.position}</span>
+                  </div>
+                  <div className="info-item">
+                    <label>이메일:</label>
+                    <span>{selectedApplicantForSchedule.email}</span>
+                  </div>
+                  <div className="info-item">
+                    <label>연락처:</label>
+                    <span>{selectedApplicantForSchedule.phone}</span>
+                  </div>
+                </div>
+              </div>
+              
+              <div className="form-group">
+                <label>면접 날짜 *</label>
+                <input
+                  type="date"
+                  value={newSchedule.interviewDate}
+                  onChange={(e) => setNewSchedule(prev => ({ ...prev, interviewDate: e.target.value }))}
+                  min={new Date().toISOString().split('T')[0]}
+                />
+              </div>
+              <div className="form-group">
+                <label>면접 시간 *</label>
+                <input
+                  type="time"
+                  value={newSchedule.interviewTime}
+                  onChange={(e) => setNewSchedule(prev => ({ ...prev, interviewTime: e.target.value }))}
+                />
+              </div>
+              <div className="form-group">
+                <label>소요시간</label>
+                <select
+                  value={newSchedule.duration}
+                  onChange={(e) => setNewSchedule(prev => ({ ...prev, duration: e.target.value }))}
+                >
+                  <option value="30분">30분</option>
+                  <option value="60분">60분</option>
+                  <option value="90분">90분</option>
+                  <option value="120분">120분</option>
+                </select>
+              </div>
+              <div className="form-group">
+                <label>면접 유형</label>
+                <select
+                  value={newSchedule.type}
+                  onChange={(e) => setNewSchedule(prev => ({ ...prev, type: e.target.value }))}
+                >
+                  <option value="대면">대면</option>
+                  <option value="화상">화상</option>
+                  <option value="전화">전화</option>
+                </select>
+              </div>
+              <div className="form-group">
+                <label>면접 장소/플랫폼</label>
+                <input
+                  type="text"
+                  value={newSchedule.platform}
+                  onChange={(e) => setNewSchedule(prev => ({ ...prev, platform: e.target.value }))}
+                  placeholder="회사 면접실, Zoom, Google Meet 등"
+                />
+              </div>
+              <div className="form-actions">
+                <button 
+                  className="btn btn-primary"
+                  onClick={createInterviewSchedule}
+                >
+                  <FiCalendar />
+                  면접일정 등록
+                </button>
+                <button 
+                  className="btn btn-secondary"
+                  onClick={() => setIsInterviewScheduleModalOpen(false)}
+                >
+                  취소
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
       {/* 캘린더 면접 일정 등록 모달 */}
       <CalendarScheduleModal
         isOpen={isCalendarScheduleModalOpen}
@@ -1201,4 +1937,4 @@ const getStatusText = (status) => {
   );
 };
 
-export default InterviewManagement;
+export default InterviewManagement; 

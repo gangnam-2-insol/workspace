@@ -108,7 +108,6 @@ const CalendarScheduleModal = ({
                   value={newSchedule.type}
                   onChange={(e) => setNewSchedule(prev => ({ ...prev, type: e.target.value }))}
                 >
-                  <option value="비대면">비대면</option>
                   <option value="대면">대면</option>
                 </select>
               </div>
