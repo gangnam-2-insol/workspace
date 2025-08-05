@@ -9,6 +9,9 @@ import random
 from datetime import datetime
 from bson import ObjectId
 from chatbot_router import router as chatbot_router
+from auth_router import auth_router  # 인증 시스템
+from documents_router import documents_router  # 문서 관리 시스템
+from company_router import company_router  # 회사 관리 시스템
 
 # FastAPI 앱 생성
 app = FastAPI(
@@ -28,6 +31,15 @@ app.add_middleware(
 
 # 챗봇 라우터 추가
 app.include_router(chatbot_router, prefix="/api/chatbot", tags=["chatbot"])
+
+# 인증 라우터 추가
+app.include_router(auth_router, prefix="/api/auth", tags=["authentication"])
+
+# 문서 관리 라우터 추가
+app.include_router(documents_router, prefix="/api/documents", tags=["documents"])
+
+# 회사 관리 라우터 추가
+app.include_router(company_router, prefix="/api/company", tags=["company"])
 
 # MongoDB 연결 (Docker Compose 환경 변수 사용)
 MONGODB_URI = os.getenv("DATABASE_URL", "mongodb://admin:password123@mongodb:27017/hireme?authSource=admin")

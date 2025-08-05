@@ -9,6 +9,9 @@ import Applications from './pages/Applications';
 import Portfolio from './pages/Portfolio';
 import Recommendations from './pages/Recommendations';
 import Interviews from './pages/Interviews';
+import MyPage from './pages/MyPage';
+import CompanyManagement from './pages/CompanyManagement';
+import JoinWithInvite from './pages/JoinWithInvite';
 import './App.css';
 
 function App() {
@@ -25,6 +28,9 @@ function App() {
             <Route path="/portfolio" element={<Portfolio />} />
             <Route path="/recommendations" element={<Recommendations />} />
             <Route path="/interviews" element={<Interviews />} />
+            <Route path="/mypage" element={<MyPage />} />
+            <Route path="/company-management" element={<CompanyManagement />} />
+            <Route path="/join" element={<JoinWithInvite />} />
           </Routes>
         </main>
         <Footer />

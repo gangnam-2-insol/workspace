@@ -53,10 +53,12 @@ const ChatbotInterface: React.FC<ChatbotInterfaceProps> = ({ page, onFieldUpdate
     }
   }, [isLoading]);
 
+  const API_BASE_URL = process.env.REACT_APP_API_URL || 'http://localhost:8000';
+
   const startSession = async () => {
     try {
       setIsLoading(true);
-      const response = await axios.post('/api/chatbot/start', { page });
+      const response = await axios.post(`${API_BASE_URL}/api/chatbot/start`, { page });
       setSessionId(response.data.session_id);
       setCurrentField(response.data.current_field);
 
@@ -95,7 +97,7 @@ const ChatbotInterface: React.FC<ChatbotInterfaceProps> = ({ page, onFieldUpdate
     setIsLoading(true);
 
     try {
-      const response = await axios.post('/api/chatbot/ask', {
+      const response = await axios.post(`${API_BASE_URL}/api/chatbot/ask`, {
         page,
         user_input: inputValue,
         session_id: sessionId
