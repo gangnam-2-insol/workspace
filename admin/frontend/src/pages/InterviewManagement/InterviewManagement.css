@@ -48,6 +48,123 @@
   padding: 24px;
 }
 
+/* 면접일정 등록 모달 스타일 */
+.applicant-info {
+  background: #f8fafc;
+  border-radius: 8px;
+  padding: 16px;
+  margin-bottom: 20px;
+  border: 1px solid #e2e8f0;
+}
+
+.applicant-info h3 {
+  margin: 0 0 12px 0;
+  font-size: 16px;
+  font-weight: 600;
+  color: #374151;
+}
+
+.info-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 12px;
+}
+
+.info-item {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.info-item label {
+  font-size: 12px;
+  font-weight: 500;
+  color: #6b7280;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+}
+
+.info-item span {
+  font-size: 14px;
+  color: #374151;
+  font-weight: 500;
+}
+
+/* AI 자동 스케줄링 모달 스타일 */
+.ai-schedule-info {
+  background: #f0f9ff;
+  border-radius: 8px;
+  padding: 16px;
+  margin-bottom: 20px;
+  border: 1px solid #bae6fd;
+}
+
+.ai-schedule-info h3 {
+  margin: 0 0 8px 0;
+  font-size: 16px;
+  font-weight: 600;
+  color: #0c4a6e;
+}
+
+.ai-schedule-info p {
+  margin: 0;
+  font-size: 14px;
+  color: #0369a1;
+  line-height: 1.5;
+}
+
+.ai-schedule-preview {
+  margin-top: 20px;
+  padding: 16px;
+  background: #f8fafc;
+  border-radius: 8px;
+  border: 1px solid #e2e8f0;
+}
+
+.ai-schedule-preview h4 {
+  margin: 0 0 12px 0;
+  font-size: 14px;
+  font-weight: 600;
+  color: #374151;
+}
+
+.unscheduled-applicants {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  max-height: 200px;
+  overflow-y: auto;
+}
+
+.applicant-item {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 8px 12px;
+  background: white;
+  border-radius: 6px;
+  border: 1px solid #e2e8f0;
+  font-size: 13px;
+}
+
+.applicant-item .name {
+  font-weight: 500;
+  color: #1e293b;
+}
+
+.applicant-item .position {
+  color: #64748b;
+  font-size: 12px;
+}
+
+.no-applicants {
+  text-align: center;
+  color: #94a3b8;
+  font-style: italic;
+  margin: 0;
+  padding: 20px;
+}
+
 .form-row {
   display: grid;
   grid-template-columns: 1fr 1fr;
@@ -1680,6 +1797,28 @@
   .action-buttons .btn {
     font-size: 12px;
     padding: 10px 8px;
+  }
+
+  .info-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .applicant-info {
+    padding: 12px;
+  }
+
+  .ai-schedule-preview {
+    margin-top: 16px;
+  }
+
+  .unscheduled-applicants {
+    max-height: 150px;
+  }
+
+  .applicant-item {
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 4px;
   }
 }
 
