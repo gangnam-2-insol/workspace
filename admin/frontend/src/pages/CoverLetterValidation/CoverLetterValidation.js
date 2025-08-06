@@ -589,6 +589,13 @@ const CoverLetterValidation = () => {
   const [isFilterOpen, setIsFilterOpen] = useState(false);
   const [selectedJobs, setSelectedJobs] = useState([]);
   const [selectedExperience, setSelectedExperience] = useState([]);
+  
+  // 선택 분석 관련 상태
+  const [isSelectiveMode, setIsSelectiveMode] = useState(false);
+  const [selectedItems, setSelectedItems] = useState([]);
+  const [isAnalysisModalOpen, setIsAnalysisModalOpen] = useState(false);
+  const [analysisResults, setAnalysisResults] = useState([]);
+  const [isAnalyzing, setIsAnalyzing] = useState(false);
 
   const handleFilterApply = () => {
     setIsFilterOpen(false);
@@ -650,6 +657,57 @@ const CoverLetterValidation = () => {
     setIsDetailModalOpen(true);
   };
 
+  // 선택 분석 관련 함수들
+  const handleSelectiveAnalysis = () => {
+    setIsSelectiveMode(!isSelectiveMode);
+    if (isSelectiveMode) {
+      setSelectedItems([]);
+    }
+  };
+
+  const handleItemSelect = (id) => {
+    setSelectedItems(prev => 
+      prev.includes(id) 
+        ? prev.filter(item => item !== id)
+        : [...prev, id]
+    );
+  };
+
+  const handleAnalyzeSelected = async () => {
+    if (selectedItems.length === 0) {
+      alert('분석할 자소서를 선택해주세요.');
+      return;
+    }
+
+    setIsAnalyzing(true);
+    
+    // AI 분석 시뮬레이션
+    setTimeout(() => {
+      const results = selectedItems.map(id => {
+        const coverLetter = coverLetters.find(cl => cl.id === id);
+        return {
+          id: id,
+          name: coverLetter.name,
+          position: coverLetter.position,
+          plagiarismRate: Math.floor(Math.random() * 20) + 5, // 5-25%
+          jobFit: Math.floor(Math.random() * 30) + 70, // 70-100%
+          talentFit: Math.floor(Math.random() * 30) + 70, // 70-100%
+          overallScore: Math.floor(Math.random() * 20) + 75, // 75-95%
+          analysis: {
+            plagiarism: '표절 검사 결과 양호합니다. 원본성 있는 내용으로 구성되어 있습니다.',
+            jobFit: '지원 직무와 높은 적합성을 보입니다. 관련 경험과 기술이 잘 드러나 있습니다.',
+            talentFit: '회사 인재상과 잘 맞습니다. 성장 의지와 협업 능력이 돋보입니다.',
+            overall: '전반적으로 우수한 자소서입니다. 개선 여지가 있지만 충분히 경쟁력 있는 내용입니다.'
+          }
+        };
+      });
+      
+      setAnalysisResults(results);
+      setIsAnalysisModalOpen(true);
+      setIsAnalyzing(false);
+    }, 2000);
+  };
+
   return (
     <CoverLetterContainer>
       <Header>
@@ -669,12 +727,42 @@ const CoverLetterValidation = () => {
               게시판
             </ViewModeButton>
           </ViewModeButtons>
+          <Button 
+            className={isSelectiveMode ? "primary" : "secondary"}
+            onClick={handleSelectiveAnalysis}
+          >
+            <FiTarget />
+            {isSelectiveMode ? '선택 모드 해제' : '선택 분석'}
+          </Button>
           <Button className="secondary">
             <FiFileText />
             일괄 분석
           </Button>
         </ActionButtons>
       </Header>
+
+      {isSelectiveMode && (
+        <div style={{ 
+          display: 'flex', 
+          justifyContent: 'space-between', 
+          alignItems: 'center', 
+          marginBottom: '16px',
+          padding: '12px 16px',
+          backgroundColor: 'var(--primary-color)',
+          color: 'white',
+          borderRadius: '8px'
+        }}>
+          <span>선택된 항목: {selectedItems.length}개</span>
+          <Button 
+            className="primary"
+            onClick={handleAnalyzeSelected}
+            disabled={isAnalyzing}
+            style={{ backgroundColor: 'white', color: 'var(--primary-color)' }}
+          >
+            {isAnalyzing ? '분석 중...' : '선택 항목 분석'}
+          </Button>
+        </div>
+      )}
 
       <SearchBar>
         <SearchInput
@@ -787,6 +875,18 @@ const CoverLetterValidation = () => {
             >
               <CardHeader>
                 <ApplicantInfo>
+                  {isSelectiveMode && (
+                    <input
+                      type="checkbox"
+                      checked={selectedItems.includes(coverLetter.id)}
+                      onChange={() => handleItemSelect(coverLetter.id)}
+                      style={{
+                        marginRight: '8px',
+                        transform: 'scale(1.2)',
+                        cursor: 'pointer'
+                      }}
+                    />
+                  )}
                   <ApplicantName>{coverLetter.name}</ApplicantName>
                   <ApplicantPosition>{coverLetter.position}</ApplicantPosition>
                 </ApplicantInfo>
@@ -828,6 +928,18 @@ const CoverLetterValidation = () => {
             <CoverLetterBoardCard key={coverLetter.id}>
               <BoardCardContent>
                 <div>
+                  {isSelectiveMode && (
+                    <input
+                      type="checkbox"
+                      checked={selectedItems.includes(coverLetter.id)}
+                      onChange={() => handleItemSelect(coverLetter.id)}
+                      style={{
+                        marginRight: '8px',
+                        transform: 'scale(1.2)',
+                        cursor: 'pointer'
+                      }}
+                    />
+                  )}
                   <ApplicantName>{coverLetter.name}</ApplicantName>
                   <ApplicantPosition>{coverLetter.position}</ApplicantPosition>
                 </div>
@@ -859,6 +971,72 @@ const CoverLetterValidation = () => {
         }}
         title={selectedCoverLetter ? `${selectedCoverLetter.name} 자소서 상세` : ''}
       >
+
+      {/* AI 분석 결과 모달 */}
+      <DetailModal
+        isOpen={isAnalysisModalOpen}
+        onClose={() => {
+          setIsAnalysisModalOpen(false);
+          setAnalysisResults([]);
+        }}
+        title="AI 분석 결과"
+        showActions={false}
+      >
+        {analysisResults.map((result, index) => (
+          <DetailSection key={result.id}>
+            <SectionTitle>{result.name} - {result.position}</SectionTitle>
+            <DetailGrid>
+              <DetailItem>
+                <DetailLabel>표절률</DetailLabel>
+                <DetailValue style={{ color: result.plagiarismRate < 15 ? '#10b981' : '#f59e0b' }}>
+                  {result.plagiarismRate}%
+                </DetailValue>
+              </DetailItem>
+              <DetailItem>
+                <DetailLabel>직무적합성</DetailLabel>
+                <DetailValue style={{ color: result.jobFit >= 80 ? '#10b981' : '#f59e0b' }}>
+                  {result.jobFit}%
+                </DetailValue>
+              </DetailItem>
+              <DetailItem>
+                <DetailLabel>인재상 적합도</DetailLabel>
+                <DetailValue style={{ color: result.talentFit >= 80 ? '#10b981' : '#f59e0b' }}>
+                  {result.talentFit}%
+                </DetailValue>
+              </DetailItem>
+              <DetailItem>
+                <DetailLabel>종합 점수</DetailLabel>
+                <DetailValue style={{ 
+                  color: result.overallScore >= 85 ? '#10b981' : result.overallScore >= 75 ? '#f59e0b' : '#ef4444',
+                  fontWeight: 'bold'
+                }}>
+                  {result.overallScore}점
+                </DetailValue>
+              </DetailItem>
+            </DetailGrid>
+            
+            <DetailSection>
+              <SectionTitle>상세 분석</SectionTitle>
+              <DetailText>
+                <strong>표절 검사:</strong> {result.analysis.plagiarism}
+              </DetailText>
+              <DetailText>
+                <strong>직무 적합성:</strong> {result.analysis.jobFit}
+              </DetailText>
+              <DetailText>
+                <strong>인재상 적합성:</strong> {result.analysis.talentFit}
+              </DetailText>
+              <DetailText>
+                <strong>종합 평가:</strong> {result.analysis.overall}
+              </DetailText>
+            </DetailSection>
+            
+            {index < analysisResults.length - 1 && (
+              <hr style={{ margin: '24px 0', border: '1px solid #e5e7eb' }} />
+            )}
+          </DetailSection>
+        ))}
+      </DetailModal>
         {selectedCoverLetter && (
           <>
             <DetailSection>

@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import styled from 'styled-components';
 import { motion } from 'framer-motion';
 import { 
@@ -336,65 +336,7 @@ const CustomStatusBadge = styled.span`
   }
 `;
 
-// 샘플 데이터
-const resumes = [
-  {
-    id: 1,
-    name: '김철수',
-    position: '프론트엔드 개발자',
-    email: 'kim@example.com',
-    phone: '010-1234-5678',
-    submittedDate: '2024-01-15',
-    status: 'reviewed',
-    experience: '3년',
-    education: '컴퓨터공학과',
-    analysisScore: 85,
-    analysisResult: '기술 스택이 요구사항과 잘 맞으며, 프로젝트 경험이 풍부합니다.',
-    wordCount: 1250
-  },
-  {
-    id: 2,
-    name: '이영희',
-    position: '백엔드 개발자',
-    email: 'lee@example.com',
-    phone: '010-2345-6789',
-    submittedDate: '2024-01-14',
-    status: 'approved',
-    experience: '5년',
-    education: '소프트웨어공학과',
-    analysisScore: 92,
-    analysisResult: '시스템 설계 경험이 뛰어나고, 성능 최적화 능력이 우수합니다.',
-    wordCount: 1580
-  },
-  {
-    id: 3,
-    name: '박민수',
-    position: 'UI/UX 디자이너',
-    email: 'park@example.com',
-    phone: '010-3456-7890',
-    submittedDate: '2024-01-13',
-    status: 'pending',
-    experience: '2년',
-    education: '디자인학과',
-    analysisScore: 78,
-    analysisResult: '창의적인 디자인 감각을 보유하고 있으며, 사용자 경험에 대한 이해가 깊습니다.',
-    wordCount: 980
-  },
-  {
-    id: 4,
-    name: '정수진',
-    position: '데이터 엔지니어',
-    email: 'jung@example.com',
-    phone: '010-4567-8901',
-    submittedDate: '2024-01-12',
-    status: 'rejected',
-    experience: '4년',
-    education: '통계학과',
-    analysisScore: 65,
-    analysisResult: '기술적 역량은 우수하나, 팀 협업 경험이 부족합니다.',
-    wordCount: 1420
-  }
-];
+
 
 const getStatusText = (status) => {
   const statusMap = {
@@ -412,12 +354,83 @@ const ResumeManagement = () => {
   const [selectedResume, setSelectedResume] = useState(null);
   const [isDetailModalOpen, setIsDetailModalOpen] = useState(false);
   const [viewMode, setViewMode] = useState('grid'); // 'grid' or 'board'
+  const [resumes, setResumes] = useState([]);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState(null);
   
   // 필터 상태 추가
   const [isFilterOpen, setIsFilterOpen] = useState(false);
   const [selectedJobs, setSelectedJobs] = useState([]);
   const [selectedExperience, setSelectedExperience] = useState([]);
   const [selectedScoreRanges, setSelectedScoreRanges] = useState([]);
+
+  // 이력서 데이터 로드
+  useEffect(() => {
+    const fetchResumes = async () => {
+      try {
+        setLoading(true);
+        const response = await fetch('http://localhost:8000/api/resumes');
+        if (!response.ok) {
+          throw new Error('이력서 데이터를 불러오는데 실패했습니다.');
+        }
+        const data = await response.json();
+        setResumes(data);
+      } catch (err) {
+        console.log('백엔드 연결 실패, 하드코딩된 데이터 사용:', err.message);
+        // 에러 시 샘플 데이터 사용
+        setResumes([
+          {
+            _id: 1,
+            name: '김철수',
+            position: '프론트엔드 개발자',
+            department: '개발팀',
+            experience: '3년',
+            skills: 'React, TypeScript, JavaScript, HTML/CSS, Node.js',
+            summary: '프론트엔드 개발 경험 3년으로 React와 TypeScript를 주로 사용하여 웹 애플리케이션을 개발했습니다. 사용자 경험을 중시하며, 반응형 디자인과 성능 최적화에 능숙합니다. 팀 프로젝트에서 협업 경험이 풍부하며, 새로운 기술 학습에 적극적입니다.',
+            analysisScore: 85,
+            analysisResult: '기술 스택이 요구사항과 잘 맞으며, 프로젝트 경험이 풍부합니다.'
+          },
+          {
+            _id: 2,
+            name: '이영희',
+            position: '백엔드 개발자',
+            department: '개발팀',
+            experience: '5년',
+            skills: 'Java, Spring Boot, MySQL, Redis, Docker, AWS',
+            summary: '백엔드 개발 경험 5년으로 Java와 Spring Boot를 주로 사용하여 안정적인 서버 애플리케이션을 구축했습니다. 데이터베이스 설계와 API 설계 경험이 풍부하며, 마이크로서비스 아키텍처에 대한 이해가 깊습니다. 성능 최적화와 보안에 중점을 두고 개발합니다.',
+            analysisScore: 92,
+            analysisResult: '시스템 설계 경험이 뛰어나고, 성능 최적화 능력이 우수합니다.'
+          },
+          {
+            _id: 3,
+            name: '박민수',
+            position: 'UI/UX 디자이너',
+            department: '디자인팀',
+            experience: '2년',
+            skills: 'Figma, Adobe XD, Photoshop, Illustrator, Sketch',
+            summary: 'UI/UX 디자인 경험 2년으로 사용자 중심의 디자인을 추구합니다. Figma와 Adobe XD를 주로 사용하여 프로토타입을 제작하며, 사용자 리서치와 테스트를 통해 지속적으로 개선합니다. 브랜드 아이덴티티와 일관성 있는 디자인 시스템 구축에 능숙합니다.',
+            analysisScore: 78,
+            analysisResult: '창의적인 디자인 감각을 보유하고 있으며, 사용자 경험에 대한 이해가 깊습니다.'
+          },
+          {
+            _id: 4,
+            name: '정수진',
+            position: '데이터 엔지니어',
+            department: '데이터팀',
+            experience: '4년',
+            skills: 'Python, SQL, Apache Spark, Hadoop, AWS, Tableau',
+            summary: '데이터 엔지니어링 경험 4년으로 대용량 데이터 처리와 분석 파이프라인 구축에 전문성을 가지고 있습니다. Python과 SQL을 주로 사용하며, 클라우드 환경에서의 데이터 처리 시스템 설계 경험이 풍부합니다. 비즈니스 인사이트 도출을 위한 데이터 시각화에도 능숙합니다.',
+            analysisScore: 88,
+            analysisResult: '데이터 처리 능력이 뛰어나며, 분석 파이프라인 구축 경험이 풍부합니다.'
+          }
+        ]);
+      } finally {
+        setLoading(false);
+      }
+    };
+
+    fetchResumes();
+  }, []);
 
   const handleFilterApply = () => {
     setIsFilterOpen(false);
@@ -453,8 +466,8 @@ const ResumeManagement = () => {
 
   const filteredResumes = resumes.filter(resume => {
     const matchesSearch = resume.name.toLowerCase().includes(searchTerm.toLowerCase()) || 
-                         resume.position.toLowerCase().includes(searchTerm.toLowerCase());
-    const matchesFilter = filterStatus === 'all' || resume.status === filterStatus;
+                         resume.position.toLowerCase().includes(searchTerm.toLowerCase()) ||
+                         resume.department.toLowerCase().includes(searchTerm.toLowerCase());
     
     // 직무 필터링
     const matchesJob = selectedJobs.length === 0 || selectedJobs.some(job => 
@@ -470,11 +483,11 @@ const ResumeManagement = () => {
       return false;
     });
     
-    return matchesSearch && matchesFilter && matchesJob && matchesExperience;
+    return matchesSearch && matchesJob && matchesExperience;
   });
 
-  // AI 추천순으로 정렬 (분석 점수 기준 내림차순)
-  const sortedResumes = filteredResumes.sort((a, b) => b.analysisScore - a.analysisScore);
+  // AI 적합도 높은 순으로 정렬
+  const sortedResumes = filteredResumes.sort((a, b) => (b.analysisScore || 0) - (a.analysisScore || 0));
 
   const handleViewDetails = (resume) => {
     setSelectedResume(resume);
@@ -485,26 +498,37 @@ const ResumeManagement = () => {
     <ResumeContainer>
       <Header>
         <Title>이력서 관리</Title>
-        <ActionButtons>
-          <ViewModeButtons>
-            <ViewModeButton 
-              active={viewMode === 'grid'} 
-              onClick={() => setViewMode('grid')}
-            >
-              그리드
-            </ViewModeButton>
-            <ViewModeButton 
-              active={viewMode === 'board'} 
-              onClick={() => setViewMode('board')}
-            >
-              게시판
-            </ViewModeButton>
-          </ViewModeButtons>
-          <Button className="primary">
-            <FiPlus />
-            새 이력서 등록
-          </Button>
-        </ActionButtons>
+        <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
+          <span style={{ 
+            fontSize: '14px', 
+            color: 'var(--text-secondary)', 
+            backgroundColor: 'var(--background-light)', 
+            padding: '4px 8px', 
+            borderRadius: '4px' 
+          }}>
+            AI 적합도 순 정렬
+          </span>
+          <ActionButtons>
+            <ViewModeButtons>
+              <ViewModeButton 
+                active={viewMode === 'grid'} 
+                onClick={() => setViewMode('grid')}
+              >
+                그리드
+              </ViewModeButton>
+              <ViewModeButton 
+                active={viewMode === 'board'} 
+                onClick={() => setViewMode('board')}
+              >
+                게시판
+              </ViewModeButton>
+            </ViewModeButtons>
+            <Button className="primary">
+              <FiPlus />
+              새 이력서 등록
+            </Button>
+          </ActionButtons>
+        </div>
       </Header>
 
       <SearchBar>
@@ -519,6 +543,20 @@ const ResumeManagement = () => {
           필터
         </FilterButton>
       </SearchBar>
+
+      {/* 로딩 상태 */}
+      {loading && (
+        <div style={{ textAlign: 'center', padding: '40px' }}>
+          <p>이력서 데이터를 불러오는 중...</p>
+        </div>
+      )}
+
+      {/* 에러 상태 */}
+      {error && (
+        <div style={{ textAlign: 'center', padding: '40px', color: 'red' }}>
+          <p>에러: {error}</p>
+        </div>
+      )}
 
       {/* 필터 모달 */}
       {isFilterOpen && (
@@ -611,7 +649,7 @@ const ResumeManagement = () => {
         <ResumeGrid>
           {sortedResumes.map((resume, index) => (
             <ResumeCard
-              key={resume.id}
+              key={resume._id || resume.id}
               initial={{ opacity: 0, y: 20 }}
               animate={{ opacity: 1, y: 0 }}
               transition={{ duration: 0.6, delay: index * 0.1 }}
@@ -621,19 +659,21 @@ const ResumeManagement = () => {
                   <ApplicantName>{resume.name}</ApplicantName>
                   <ApplicantPosition>{resume.position}</ApplicantPosition>
                 </ApplicantInfo>
-                <CustomStatusBadge className={resume.status}>
-                  {getStatusText(resume.status)}
-                </CustomStatusBadge>
+
               </ResumeHeader>
 
               <ResumeContent>
+                <ResumeDetail>
+                  <DetailLabel>희망부서:</DetailLabel>
+                  <DetailValue>{resume.department}</DetailValue>
+                </ResumeDetail>
                 <ResumeDetail>
                   <DetailLabel>경력:</DetailLabel>
                   <DetailValue>{resume.experience}</DetailValue>
                 </ResumeDetail>
                 <ResumeDetail>
-                  <DetailLabel>학력:</DetailLabel>
-                  <DetailValue>{resume.education}</DetailValue>
+                  <DetailLabel>기술스택:</DetailLabel>
+                  <DetailValue>{resume.skills}</DetailValue>
                 </ResumeDetail>
               </ResumeContent>
 
@@ -642,12 +682,12 @@ const ResumeManagement = () => {
                 <AnalysisScore>
                   <ScoreText>적합도</ScoreText>
                   <ScoreBar>
-                    <ScoreFill score={resume.analysisScore} />
+                    <ScoreFill score={resume.analysisScore || 0} />
                   </ScoreBar>
-                  <ScoreText>{resume.analysisScore}%</ScoreText>
+                  <ScoreText>{resume.analysisScore || 0}%</ScoreText>
                 </AnalysisScore>
-                <div style={{ fontSize: '14px', color: 'var(--text-secondary)' }}>
-                  {resume.analysisResult}
+                <div style={{ fontSize: '14px', color: 'var(--text-secondary)', marginTop: '8px' }}>
+                  {resume.analysisResult || '분석 결과가 없습니다.'}
                 </div>
               </AnalysisResult>
 
@@ -670,19 +710,18 @@ const ResumeManagement = () => {
       ) : (
         <ResumeBoard>
           {sortedResumes.map((resume) => (
-            <ResumeBoardCard key={resume.id}>
+            <ResumeBoardCard key={resume._id || resume.id}>
               <BoardCardContent>
                 <div>
                   <ApplicantName>{resume.name}</ApplicantName>
                   <ApplicantPosition>{resume.position}</ApplicantPosition>
                 </div>
-                                                                   <div style={{ display: 'flex', gap: '60px', alignItems: 'center' }}>
-                    <span>제출일: {resume.submittedDate}</span>
-                    <span>글자수: {resume.wordCount}자</span>
-                    <AnalysisScore>
-                      <ScoreText>{resume.analysisScore}점</ScoreText>
-                    </AnalysisScore>
-                  </div>
+                <div style={{ display: 'flex', gap: '80px', alignItems: 'center', fontSize: '14px', color: 'var(--text-secondary)', flexWrap: 'nowrap', overflow: 'hidden' }}>
+                  <span style={{ minWidth: '80px' }}>{resume.department}</span>
+                  <span style={{ minWidth: '60px' }}>{resume.experience}</span>
+                  <span style={{ minWidth: '200px', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{resume.skills}</span>
+                  <span style={{ minWidth: '60px' }}>{resume.analysisScore || 0}%</span>
+                </div>
               </BoardCardContent>
               <BoardCardActions>
                 <ActionButton onClick={() => handleViewDetails(resume)}>
@@ -714,71 +753,28 @@ const ResumeManagement = () => {
                   <DetailValue>{selectedResume.name}</DetailValue>
                 </DetailItem>
                 <DetailItem>
-                  <DetailLabel>지원 직무</DetailLabel>
+                  <DetailLabel>직책</DetailLabel>
                   <DetailValue>{selectedResume.position}</DetailValue>
                 </DetailItem>
                 <DetailItem>
-                  <DetailLabel>이메일</DetailLabel>
-                  <DetailValue>{selectedResume.email}</DetailValue>
-                </DetailItem>
-                <DetailItem>
-                  <DetailLabel>연락처</DetailLabel>
-                  <DetailValue>{selectedResume.phone}</DetailValue>
+                  <DetailLabel>희망부서</DetailLabel>
+                  <DetailValue>{selectedResume.department}</DetailValue>
                 </DetailItem>
                 <DetailItem>
                   <DetailLabel>경력</DetailLabel>
                   <DetailValue>{selectedResume.experience}</DetailValue>
                 </DetailItem>
                 <DetailItem>
-                  <DetailLabel>학력</DetailLabel>
-                  <DetailValue>{selectedResume.education}</DetailValue>
-                </DetailItem>
-                <DetailItem>
-                  <DetailLabel>제출일</DetailLabel>
-                  <DetailValue>{selectedResume.submittedDate}</DetailValue>
-                </DetailItem>
-                <DetailItem>
-                  <DetailLabel>상태</DetailLabel>
-                  <CustomStatusBadge className={selectedResume.status} style={{ 
-                    padding: '6px 12px', 
-                    fontSize: '12px', 
-                    borderRadius: '12px',
-                    display: 'inline-block',
-                    width: 'fit-content',
-                    height: '24px',
-                    textAlign: 'center',
-                    lineHeight: '12px',
-                    display: 'flex',
-                    alignItems: 'center',
-                    justifyContent: 'center',
-                    whiteSpace: 'nowrap'
-                  }}>
-                    {getStatusText(selectedResume.status)}
-                  </CustomStatusBadge>
+                  <DetailLabel>기술스택</DetailLabel>
+                  <DetailValue>{selectedResume.skills}</DetailValue>
                 </DetailItem>
               </DetailGrid>
             </DetailSection>
 
             <DetailSection>
-              <SectionTitle>AI 분석 결과</SectionTitle>
-              <DetailGrid>
-                <DetailItem>
-                  <DetailLabel>적합도 점수</DetailLabel>
-                  <DetailValue>{selectedResume.analysisScore}%</DetailValue>
-                </DetailItem>
-                <DetailItem>
-                  <DetailLabel>분석 결과</DetailLabel>
-                  <DetailValue>{selectedResume.analysisResult}</DetailValue>
-                </DetailItem>
-              </DetailGrid>
-            </DetailSection>
-
-            <DetailSection>
-              <SectionTitle>추가 정보</SectionTitle>
+              <SectionTitle>요약</SectionTitle>
               <DetailText>
-                이 지원자는 {selectedResume.experience}의 경력을 가지고 있으며, 
-                {selectedResume.education} 학력을 보유하고 있습니다. 
-                AI 분석 결과 {selectedResume.analysisScore}%의 적합도를 보여주고 있습니다.
+                {selectedResume.summary}
               </DetailText>
             </DetailSection>
           </>

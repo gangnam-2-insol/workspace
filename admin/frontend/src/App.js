@@ -4,6 +4,7 @@ import Layout from './components/Layout/Layout';
 import Dashboard from './pages/Dashboard/Dashboard';
 import JobPostingRegistration from './pages/JobPostingRegistration/JobPostingRegistration';
 import ResumeManagement from './pages/ResumeManagement/ResumeManagement';
+import ApplicantManagement from './pages/ApplicantManagement';
 import InterviewManagement from './pages/InterviewManagement/InterviewManagement';
 import InterviewCalendar from './pages/InterviewManagement/InterviewCalendar';
 import PortfolioAnalysis from './pages/PortfolioAnalysis/PortfolioAnalysis';
@@ -116,6 +117,7 @@ function App() {
           <Route path="/" element={<Dashboard />} />
           <Route path="/job-posting" element={<JobPostingRegistration />} />
           <Route path="/resume" element={<ResumeManagement />} />
+          <Route path="/applicants" element={<ApplicantManagement />} />
           <Route path="/interview" element={<InterviewManagement />} />
           <Route path="/interview-calendar" element={<InterviewCalendar />} />
           <Route path="/portfolio" element={<PortfolioAnalysis />} />
