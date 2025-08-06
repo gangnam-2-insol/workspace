@@ -141,17 +141,9 @@ hireme_project/
 - **면접**: 면접 일정 및 결과
 - **추천**: AI 기반 맞춤 추천
 - **포트폴리오**: 개인 포트폴리오 관리
-- **문서 관리**: 이력서, 포트폴리오, 자소서 파일 업로드 및 관리
 - **제품/서비스**: 회사 제품/서비스 소개
 - **고객센터**: 문의 및 지원
 - **마이페이지**: 개인 정보 관리
-
-#### 문서 관리 시스템
-- **파일 업로드**: 이력서, 포트폴리오, 자소서 파일 업로드
-- **파일 관리**: 업로드된 파일 목록 조회, 다운로드, 삭제
-- **파일 분류**: 파일 타입별 자동 분류 및 관리
-- **보안**: 사용자별 데이터 격리 및 JWT 토큰 기반 인증
-- **지원 형식**: PDF, DOC, DOCX, TXT, ZIP, RAR
 
 ## 🛠️ 설치 및 실행
 
@@ -297,6 +289,60 @@ EMAIL_SERVICE=your-email-service
 3. Commit your changes (`git commit -m 'Add some AmazingFeature'`)
 4. Push to the branch (`git push origin feature/AmazingFeature`)
 5. Open a Pull Request
+
+## 📅 업데이트 히스토리
+
+### 2025-08-05 (최신)
+#### 🔧 문서 관리 시스템 구현
+- **문서 관리 API 구현**:
+  - `documents_router.py` 신규 생성
+  - 파일 업로드/다운로드/삭제 API 엔드포인트
+  - JWT 토큰 기반 인증 시스템
+  - MongoDB에 계정별 문서 데이터 저장
+  - 파일 타입별 분류 및 검증 시스템
+- **문서 관리 페이지 구현**:
+  - `Documents.tsx` 신규 생성
+  - 파일 업로드, 목록 조회, 다운로드, 삭제 기능
+  - 파일 타입별 필터링 기능
+  - 반응형 디자인 적용
+- **라우팅 및 네비게이션**:
+  - App.tsx에 문서 관리 라우트 추가
+  - Header.tsx에 문서관리 메뉴 추가
+- **지원 파일 형식**:
+  - 이력서: PDF, DOC, DOCX
+  - 포트폴리오: PDF, DOC, DOCX, ZIP, RAR
+  - 자기소개서: PDF, DOC, DOCX, TXT
+- **보안 및 데이터 관리**:
+  - 사용자별 데이터 격리
+  - 파일 크기 및 확장자 검증
+  - 안전한 파일 저장 및 접근 제어
+
+### 2025-07-31
+#### 🔧 시스템 안정성 및 AI 개선
+- **Docker 시스템 복구**: Docker Desktop 재설치 후 전체 프로젝트 재빌드 및 복구 완료
+- **MongoDB 연결 최적화**: 
+  - Admin Backend & Client Backend MongoDB 연결 설정 통일
+  - Docker Compose 환경변수와 일치하도록 연결 URI 수정
+  - 데이터베이스명 `hireme`로 통일
+- **포트 충돌 해결**: 
+  - Admin Backend: 8001 포트 고정
+  - Client Backend: 8000 포트 고정
+  - Dockerfile 내 포트 설정 일치 확인
+- **인재 데이터 관리**: 
+  - MongoDB 초기화 스크립트에 5명 샘플 인재 데이터 추가
+  - 김철수, 이영희, 박민수, 정수진, 최하늘 프로필 포함
+  - API를 통한 실시간 데이터 조회 기능 검증
+- **AI 매칭 시스템 개선**:
+  - `ai_matching_service.py` 신규 모듈 개발
+  - HuggingFace `sentence-transformers` 모델 임시 비활성화 (빌드 최적화)
+  - Gemini AI 챗봇 기능 유지 및 안정성 확보
+  - 향상된 규칙 기반 매칭 알고리즘 적용
+  - 의미적 유사도 계산 및 AI 기반 추천 이유 생성
+- **시스템 검증**: 
+  - 전체 API 엔드포인트 정상 작동 확인
+  - Frontend-Backend 연동 테스트 완료
+  - 데이터 동기화 및 실시간 업데이트 검증
+  - 브라우저에서 Admin/Client 페이지 정상 실행 확인
 
 ## 📄 라이선스
 

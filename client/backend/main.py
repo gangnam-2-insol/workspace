@@ -7,6 +7,7 @@ import os
 from datetime import datetime
 from chatbot_router import router as chatbot_router
 from resume_service import ResumeService
+from documents_router import router as documents_router
 
 # FastAPI 앱 생성
 app = FastAPI(
@@ -26,6 +27,9 @@ app.add_middleware(
 
 # 챗봇 라우터 추가
 app.include_router(chatbot_router, prefix="/api/chatbot", tags=["chatbot"])
+
+# 문서 관리 라우터 추가
+app.include_router(documents_router)
 
 # MongoDB 연결
 MONGODB_URI = os.getenv("MONGODB_URI", "mongodb://localhost:27017/hireme-client")

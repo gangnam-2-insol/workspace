@@ -9,6 +9,7 @@ import Applications from './pages/Applications';
 import Portfolio from './pages/Portfolio';
 import Recommendations from './pages/Recommendations';
 import Interviews from './pages/Interviews';
+import Documents from './pages/Documents';
 import './App.css';
 
 function App() {
@@ -25,6 +26,7 @@ function App() {
             <Route path="/portfolio" element={<Portfolio />} />
             <Route path="/recommendations" element={<Recommendations />} />
             <Route path="/interviews" element={<Interviews />} />
+            <Route path="/documents" element={<Documents />} />
           </Routes>
         </main>
         <Footer />

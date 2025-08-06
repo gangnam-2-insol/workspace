@@ -19,6 +19,7 @@ const Header: React.FC = () => {
     { text: '공고', href: '/jobs' },
     { text: '지원서', href: '/applications' },
     { text: '포트폴리오', href: '/portfolio' },
+    { text: '문서관리', href: '/documents' },
     { text: '인재추천', href: '/recommendations' },
     { text: '면접', href: '/interviews' },
   ];

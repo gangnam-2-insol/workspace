@@ -14,4 +14,5 @@ chromadb==0.4.18
 sentence-transformers==2.2.2
 numpy==1.24.3
 websockets==15.0.1
-python-socketio==5.13.0 
+python-socketio==5.13.0
+PyJWT==2.8.0 
