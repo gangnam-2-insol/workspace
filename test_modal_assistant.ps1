@@ -1,0 +1,156 @@
+# Modal Assistant 50회 테스트 스크립트
+$baseUrl = "http://localhost:8000/api/chatbot/chat"
+$sessionId = "test_session_$(Get-Date -Format 'yyyyMMddHHmmss')"
+
+# 테스트 케이스 정의
+$testCases = @(
+    # 1. 직접적인 답변 (명확한 필드 값)
+    @{input="개발팀"; expected="department"},
+    @{input="3명"; expected="headcount"},
+    @{input="웹개발"; expected="mainDuties"},
+    @{input="09:00-18:00"; expected="workHours"},
+    @{input="서울"; expected="locationCity"},
+    @{input="5000만원"; expected="salary"},
+    @{input="2024년 12월 31일"; expected="deadline"},
+    @{input="hr@company.com"; expected="contactEmail"},
+    
+    # 2. 대화형 답변 (맥락에서 추출 가능한 정보)
+    @{input="우리 회사는 개발팀에서 일할 사람을 찾고 있어"; expected="department"},
+    @{input="인원은 2명 정도로 생각하고 있어"; expected="headcount"},
+    @{input="주로 웹 개발과 앱 개발을 담당하게 될 거야"; expected="mainDuties"},
+    @{input="근무시간은 오전 9시부터 오후 6시까지야"; expected="workHours"},
+    @{input="서울 강남구에 있는 회사야"; expected="locationCity"},
+    @{input="연봉은 5000만원 정도로 생각하고 있어"; expected="salary"},
+    @{input="마감일은 올해 12월 말까지야"; expected="deadline"},
+    @{input="지원은 hr@company.com으로 받을 예정이야"; expected="contactEmail"},
+    
+    # 3. 질문/요청 (추천, 제안 등)
+    @{input="개발팀 추천해줘"; expected="question"},
+    @{input="인원 몇 명이 좋을까?"; expected="question"},
+    @{input="주요 업무는 뭐가 좋을까?"; expected="question"},
+    @{input="근무시간 어떻게 정할까?"; expected="question"},
+    @{input="어디 지역이 좋을까?"; expected="question"},
+    @{input="연봉은 얼마가 적당할까?"; expected="question"},
+    @{input="마감일 언제로 하면 좋을까?"; expected="question"},
+    @{input="이메일 주소 어떻게 정할까?"; expected="question"},
+    
+    # 4. 불명확한 입력
+    @{input="안녕하세요"; expected="unclear"},
+    @{input="그냥"; expected="unclear"},
+    @{input="음..."; expected="unclear"},
+    @{input="잘 모르겠어"; expected="unclear"},
+    @{input="아무거나"; expected="unclear"},
+    @{input="그래"; expected="unclear"},
+    @{input="좋아"; expected="unclear"},
+    @{input="알겠어"; expected="unclear"},
+    
+    # 5. 혼합형 입력 (답변과 질문이 섞인 경우)
+    @{input="개발팀인데 인원은 몇 명이 좋을까?"; expected="conversational_answer"},
+    @{input="웹개발 하는데 연봉은 얼마가 적당할까?"; expected="conversational_answer"},
+    @{input="서울에 있는데 근무시간은 어떻게 정할까?"; expected="conversational_answer"},
+    @{input="3명 뽑을 건데 주요 업무는 뭐가 좋을까?"; expected="conversational_answer"},
+    @{input="09:00-18:00 근무인데 어디 지역이 좋을까?"; expected="conversational_answer"},
+    @{input="5000만원 연봉인데 마감일은 언제로 하면 좋을까?"; expected="conversational_answer"},
+    @{input="hr@company.com으로 받을 건데 인원은 몇 명이 좋을까?"; expected="conversational_answer"},
+    
+    # 6. 추가 대화형 답변
+    @{input="우리 회사는 IT 회사라서 개발팀이 필요해"; expected="department"},
+    @{input="신입 2명, 경력 1명 총 3명 뽑을 예정이야"; expected="headcount"},
+    @{input="프론트엔드와 백엔드 개발을 담당하게 될 거야"; expected="mainDuties"},
+    @{input="유연근무제를 운영하고 있어서 자유롭게 출근할 수 있어"; expected="workHours"},
+    @{input="강남역 근처에 있는 스타트업이야"; expected="locationCity"},
+    @{input="신입은 3000만원, 경력은 5000만원 정도로 생각하고 있어"; expected="salary"},
+    @{input="상시채용으로 진행할 예정이야"; expected="deadline"},
+    @{input="recruit@startup.com으로 지원받을 거야"; expected="contactEmail"},
+    
+    # 7. 다양한 표현 방식
+    @{input="개발자 구해요"; expected="department"},
+    @{input="프로그래머 2명"; expected="headcount"},
+    @{input="코딩 담당"; expected="mainDuties"},
+    @{input="오전 9시 출근"; expected="workHours"},
+    @{input="강남구"; expected="locationCity"},
+    @{input="연봉 4000만원"; expected="salary"},
+    @{input="채용시 마감"; expected="deadline"},
+    @{input="채용 담당자 메일"; expected="contactEmail"}
+)
+
+Write-Host "=== Modal Assistant 50회 테스트 시작 ===" -ForegroundColor Green
+Write-Host "세션 ID: $sessionId" -ForegroundColor Yellow
+Write-Host ""
+
+$testResults = @()
+$successCount = 0
+$totalCount = 0
+
+foreach ($testCase in $testCases) {
+    $totalCount++
+    $input = $testCase.input
+    $expected = $testCase.expected
+    
+    Write-Host "[테스트 $totalCount] 입력: '$input'" -ForegroundColor Cyan
+    
+    try {
+        $body = @{
+            user_input = $input
+            mode = "modal_assistant"
+            session_id = $sessionId
+        } | ConvertTo-Json
+        
+        $response = Invoke-RestMethod -Uri $baseUrl -Method POST -ContentType "application/json" -Body $body
+        
+        $result = @{
+            TestNumber = $totalCount
+            Input = $input
+            Expected = $expected
+            Response = $response
+            Success = $true
+            Error = $null
+        }
+        
+        Write-Host "  응답: $($response.message)" -ForegroundColor Green
+        Write-Host "  필드: $($response.field)" -ForegroundColor Green
+        Write-Host "  값: $($response.value)" -ForegroundColor Green
+        $successCount++
+        
+    } catch {
+        $result = @{
+            TestNumber = $totalCount
+            Input = $input
+            Expected = $expected
+            Response = $null
+            Success = $false
+            Error = $_.Exception.Message
+        }
+        
+        Write-Host "  오류: $($_.Exception.Message)" -ForegroundColor Red
+    }
+    
+    $testResults += $result
+    Write-Host ""
+    
+    # 잠시 대기 (서버 부하 방지)
+    Start-Sleep -Milliseconds 500
+}
+
+# 결과 요약
+Write-Host "=== 테스트 결과 요약 ===" -ForegroundColor Green
+Write-Host "총 테스트: $totalCount" -ForegroundColor Yellow
+Write-Host "성공: $successCount" -ForegroundColor Green
+Write-Host "실패: $($totalCount - $successCount)" -ForegroundColor Red
+Write-Host "성공률: $([math]::Round(($successCount / $totalCount) * 100, 2))%" -ForegroundColor Cyan
+
+# 실패한 테스트 상세 정보
+$failedTests = $testResults | Where-Object { -not $_.Success }
+if ($failedTests.Count -gt 0) {
+    Write-Host ""
+    Write-Host "=== 실패한 테스트 상세 ===" -ForegroundColor Red
+    foreach ($failedTest in $failedTests) {
+        Write-Host "[테스트 $($failedTest.TestNumber)] $($failedTest.Input) - $($failedTest.Error)" -ForegroundColor Red
+    }
+}
+
+# 결과를 파일로 저장
+$resultsFile = "test_results_$(Get-Date -Format 'yyyyMMddHHmmss').json"
+$testResults | ConvertTo-Json -Depth 10 | Out-File -FilePath $resultsFile -Encoding UTF8
+Write-Host ""
+Write-Host "상세 결과가 $resultsFile 파일에 저장되었습니다." -ForegroundColor Yellow 

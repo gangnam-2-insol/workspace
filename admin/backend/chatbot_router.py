@@ -326,7 +326,7 @@ def is_valid_answer_for_field(text: str, field: str) -> bool:
 
 def extract_field_value(text: str, field: str, field_config: dict) -> str:
     """
-    필드에 맞는 값 추출
+    필드에 맞는 값 추출 (대화형 입력 고려) - 개선된 버전
     """
     import re
     
@@ -335,40 +335,209 @@ def extract_field_value(text: str, field: str, field_config: dict) -> str:
     print(f"[DEBUG] 대상 필드: {field}")
     print(f"[DEBUG] 필드 설정: {field_config}")
     
-    if field == 'headcount' and field_config.get('extract_number'):
-        # 숫자만 추출
-        numbers = re.findall(r'\d+', text)
-        if numbers:
-            extracted = numbers[0] + '명'
-            print(f"[DEBUG] headcount - 숫자 추출: {numbers[0]} → {extracted}")
-            return extracted
-        print(f"[DEBUG] headcount - 숫자 없음, 원본 반환")
-        return text
+    # 텍스트 정리 (대화형 입력에서 불필요한 부분 제거)
+    cleaned_text = text.strip()
     
-    elif field == 'salary' and field_config.get('extract_number'):
-        # 숫자만 추출
-        numbers = re.findall(r'\d+', text)
+    if field == 'headcount':
+        # 숫자만 추출 (개선된 패턴)
+        numbers = re.findall(r'\d+', cleaned_text)
         if numbers:
-            extracted = numbers[0] + '만원'
-            print(f"[DEBUG] salary - 숫자 추출: {numbers[0]} → {extracted}")
+            # 가장 큰 숫자를 선택 (예: "신입 2명, 경력 1명 총 3명" → "3명")
+            max_number = max(numbers, key=int)
+            extracted = max_number + '명'
+            print(f"[DEBUG] headcount - 숫자 추출: {max_number} → {extracted}")
+            return extracted
+        
+        # "명"이 포함된 경우 숫자 추출 시도
+        if '명' in cleaned_text:
+            # "2명 정도", "3명 정도" 등의 패턴에서 숫자 추출
+            number_match = re.search(r'(\d+)명', cleaned_text)
+            if number_match:
+                number = number_match.group(1)
+                extracted = number + '명'
+                print(f"[DEBUG] headcount - '명' 포함 숫자 추출: {number} → {extracted}")
+                return extracted
+            
+            # "한 명", "두 명" 등의 한글 숫자 처리
+            korean_numbers = {
+                '한': '1', '두': '2', '세': '3', '네': '4', '다섯': '5',
+                '여섯': '6', '일곱': '7', '여덟': '8', '아홉': '9', '열': '10'
+            }
+            for korean, arabic in korean_numbers.items():
+                if f"{korean} 명" in cleaned_text:
+                    extracted = arabic + '명'
+                    print(f"[DEBUG] headcount - 한글 숫자 추출: {korean} → {extracted}")
+                    return extracted
+        
+        # 숫자 + "명" 패턴이 없는 경우, 숫자만 추출
+        if numbers:
+            max_number = max(numbers, key=int)
+            extracted = max_number + '명'
+            print(f"[DEBUG] headcount - 숫자만 추출: {max_number} → {extracted}")
+            return extracted
+        
+        print(f"[DEBUG] headcount - 숫자 없음, 원본 반환")
+        return cleaned_text
+    
+    elif field == 'salary':
+        # 숫자만 추출 (개선된 패턴)
+        numbers = re.findall(r'\d+', cleaned_text)
+        if numbers:
+            # 가장 큰 숫자를 선택 (예: "신입은 3000만원, 경력은 5000만원" → "5000만원")
+            max_number = max(numbers, key=int)
+            extracted = max_number + '만원'
+            print(f"[DEBUG] salary - 숫자 추출: {max_number} → {extracted}")
             return extracted
         print(f"[DEBUG] salary - 숫자 없음, 원본 반환")
-        return text
+        return cleaned_text
     
     elif field == 'department':
-        # 부서명 추출
-        department_keywords = ['개발팀', '마케팅팀', '영업팀', '디자인팀', '기획팀', '인사팀']
-        for keyword in department_keywords:
-            if keyword in text:
+        # 부서명 추출 (대화형 입력 고려) - 개선된 로직
+        department_keywords = ['개발팀', '마케팅팀', '영업팀', '디자인팀', '기획팀', '인사팀', '개발', '마케팅', '영업', '디자인', '기획', '인사']
+        
+        # 우선순위가 높은 키워드부터 검색
+        for keyword in ['개발팀', '마케팅팀', '영업팀', '디자인팀', '기획팀', '인사팀']:
+            if keyword in cleaned_text:
                 print(f"[DEBUG] department - 부서명 추출: {keyword}")
                 return keyword
+        
+        # 단일 키워드 검색
+        for keyword in ['개발', '마케팅', '영업', '디자인', '기획', '인사']:
+            if keyword in cleaned_text:
+                keyword_with_team = keyword + '팀'
+                print(f"[DEBUG] department - 부서명 추출: {keyword_with_team}")
+                return keyword_with_team
+        
         print(f"[DEBUG] department - 부서명 없음, 원본 반환")
-        return text
+        return cleaned_text
+    
+    elif field == 'mainDuties':
+        # 주요 업무 추출 (대화형 입력 고려) - 개선된 로직
+        duty_keywords = [
+            '웹개발', '앱개발', '모바일개발', '서버개발', '프론트엔드', '백엔드', '풀스택', 'UI/UX', 'UI디자인', 'UX디자인', '그래픽디자인', '편집디자인', '패키지디자인',
+            '브랜드마케팅', '디지털마케팅', '콘텐츠마케팅', 'SNS마케팅', '퍼포먼스마케팅',
+            '데이터분석', 'AI개발', '프로그래밍', '코딩', '브랜딩',
+            '개발', '디자인', '마케팅', '영업', '기획', '관리', '운영', '분석', '설계', '테스트', '유지보수',
+            '광고', '홍보', '콘텐츠', 'SNS', '고객관리', '매출관리', '전략기획', '사업기획', '제품기획'
+        ]
+        
+        # 우선순위가 높은 키워드부터 검색 (더 구체적인 키워드 우선)
+        priority_keywords = ['웹개발', '앱개발', '모바일개발', '서버개발', '프론트엔드', '백엔드', '풀스택', 
+                           'UI/UX', 'UI디자인', 'UX디자인', '그래픽디자인', '편집디자인', '패키지디자인',
+                           '브랜드마케팅', '디지털마케팅', '콘텐츠마케팅', 'SNS마케팅', '퍼포먼스마케팅',
+                           '데이터분석', 'AI개발', '프로그래밍', '코딩']
+        
+        for keyword in priority_keywords:
+            if keyword in cleaned_text:
+                print(f"[DEBUG] mainDuties - 우선순위 업무 추출: {keyword}")
+                return keyword
+        
+        # 일반 키워드 검색
+        general_keywords = ['개발', '디자인', '마케팅', '영업', '기획', '관리', '운영', '분석', '설계', '테스트', '유지보수']
+        for keyword in general_keywords:
+            if keyword in cleaned_text:
+                print(f"[DEBUG] mainDuties - 일반 업무 추출: {keyword}")
+                return keyword
+        
+        print(f"[DEBUG] mainDuties - 업무 없음, 원본 반환")
+        return cleaned_text
+    
+    elif field == 'workHours':
+        # 근무 시간 추출 (개선된 패턴)
+        time_patterns = [
+            r'\d{1,2}:\d{2}-\d{1,2}:\d{2}',  # 09:00-18:00 형태
+            r'오전 \d{1,2}시', r'오후 \d{1,2}시',  # 오전 9시, 오후 6시
+            r'유연근무', r'재택근무', r'시차출근'
+        ]
+        
+        for pattern in time_patterns:
+            matches = re.findall(pattern, cleaned_text)
+            if matches:
+                print(f"[DEBUG] workHours - 시간 패턴 추출: {matches[0]}")
+                return matches[0]
+        
+        # "오전 9시부터 오후 6시까지" 형태의 패턴 처리
+        if '오전' in cleaned_text and '오후' in cleaned_text:
+            morning_match = re.search(r'오전 (\d{1,2})시', cleaned_text)
+            afternoon_match = re.search(r'오후 (\d{1,2})시', cleaned_text)
+            if morning_match and afternoon_match:
+                morning_hour = morning_match.group(1)
+                afternoon_hour = afternoon_match.group(1)
+                extracted = f"{morning_hour.zfill(2)}:00-{afternoon_hour.zfill(2)}:00"
+                print(f"[DEBUG] workHours - 오전/오후 시간 추출: {extracted}")
+                return extracted
+        
+        # 시간 관련 키워드가 있는지 확인
+        time_keywords = ['시', '시간', '출근', '근무']
+        if any(keyword in cleaned_text for keyword in time_keywords):
+            # 시간 정보가 포함된 문장에서 시간 부분만 추출
+            time_match = re.search(r'(\d{1,2}:\d{2})', cleaned_text)
+            if time_match:
+                extracted = time_match.group(1)
+                print(f"[DEBUG] workHours - 시간 추출: {extracted}")
+                return extracted
+            
+            # "9시부터 6시까지" 형태의 패턴 처리
+            time_range_match = re.search(r'(\d{1,2})시부터 (\d{1,2})시까지', cleaned_text)
+            if time_range_match:
+                start_hour = time_range_match.group(1)
+                end_hour = time_range_match.group(2)
+                extracted = f"{start_hour.zfill(2)}:00-{end_hour.zfill(2)}:00"
+                print(f"[DEBUG] workHours - 시간 범위 추출: {extracted}")
+                return extracted
+        
+        print(f"[DEBUG] workHours - 시간 패턴 없음, 원본 반환")
+        return cleaned_text
+    
+    elif field == 'locationCity':
+        # 근무 위치 추출 (개선된 로직)
+        location_keywords = [
+            '서울', '부산', '대구', '인천', '대전', '광주', '울산', '세종', 
+            '경기', '강원', '충북', '충남', '전북', '전남', '경북', '경남', '제주',
+            '강남', '강북', '서초', '송파', '마포', '용산', '영등포', '동대문', '중구'
+        ]
+        
+        for keyword in location_keywords:
+            if keyword in cleaned_text:
+                print(f"[DEBUG] locationCity - 위치 추출: {keyword}")
+                return keyword
+        
+        print(f"[DEBUG] locationCity - 위치 없음, 원본 반환")
+        return cleaned_text
+    
+    elif field == 'deadline':
+        # 마감일 추출 (개선된 로직)
+        deadline_patterns = [
+            r'\d{4}년 \d{1,2}월 \d{1,2}일',  # 2024년 12월 31일
+            r'\d{1,2}월 \d{1,2}일',  # 12월 31일
+            r'상시채용', r'채용시마감'
+        ]
+        
+        for pattern in deadline_patterns:
+            matches = re.findall(pattern, cleaned_text)
+            if matches:
+                print(f"[DEBUG] deadline - 마감일 추출: {matches[0]}")
+                return matches[0]
+        
+        print(f"[DEBUG] deadline - 마감일 없음, 원본 반환")
+        return cleaned_text
+    
+    elif field == 'contactEmail':
+        # 이메일 추출 (개선된 로직)
+        email_pattern = r'[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}'
+        email_match = re.search(email_pattern, cleaned_text)
+        if email_match:
+            extracted = email_match.group(0)
+            print(f"[DEBUG] contactEmail - 이메일 추출: {extracted}")
+            return extracted
+        
+        print(f"[DEBUG] contactEmail - 이메일 없음, 원본 반환")
+        return cleaned_text
     
     else:
-        # 기본적으로 원본 텍스트 반환
-        print(f"[DEBUG] 기본 처리 - 원본 반환")
-        return text
+        # 기본적으로 정리된 텍스트 반환
+        print(f"[DEBUG] 기본 처리 - 정리된 텍스트 반환")
+        return cleaned_text
 
 # 기존 detect_intent 함수는 호환성을 위해 유지
 def detect_intent(user_input: str):
@@ -801,25 +970,44 @@ async def handle_modal_assistant_request(request: ChatbotRequest):
     
     response_message = llm_response["message"]
     
-    # LLM이 필드 값을 추출했다고 판단한 경우 (value가 있는 경우)
-    if llm_response.get("value"):
+    # 명확하지 않은 입력인 경우 먼저 확인
+    if llm_response.get("is_unclear", False):
+        # 명확하지 않은 입력인 경우 다음 단계로 넘어가지 않음
+        print(f"[DEBUG] 명확하지 않은 입력으로 인식됨 - current_field_index 증가하지 않음")
+    # 대화형 응답인 경우 (질문에 대한 답변)
+    elif llm_response.get("is_conversation", False):
+        # 대화형 응답인 경우 다음 단계로 넘어가지 않음
+        print(f"[DEBUG] 대화형 응답으로 인식됨 - current_field_index 증가하지 않음")
+    # LLM이 필드 값을 추출했다고 판단한 경우 (value가 있고, 명확하지 않은 입력이 아닌 경우)
+    elif llm_response.get("value") and not llm_response.get("is_unclear", False):
         # 필드 키를 명시적으로 설정
         field_key = llm_response.get("field", current_field["key"])
         field_value = llm_response["value"]
         
-        print(f"[DEBUG] 필드 업데이트 - 키: {field_key}, 값: {field_value}")
-        session["filled_fields"][field_key] = field_value
-        
-        # 다음 필드로 이동
-        session["current_field_index"] += 1
-        
-        if session["current_field_index"] < len(fields):
-            next_field = fields[session["current_field_index"]]
-            # LLM이 다음 질문을 생성하도록 유도하거나, 여기에서 생성
-            next_message = f"\n\n다음으로 {next_field.get('label', '다음 항목')}에 대해 알려주세요."
-            response_message += next_message
+        # 값이 유효한지 확인 (빈 문자열이나 의미없는 값이 아닌지)
+        invalid_values = ["ai 채용공고 등록 도우미", "채용공고 등록 도우미", "ai 어시스턴트", "채용공고", "도우미", "ai", ""]
+        if field_value and field_value.strip() and field_value.lower() not in invalid_values:
+            print(f"[DEBUG] 필드 업데이트 - 키: {field_key}, 값: {field_value}")
+            session["filled_fields"][field_key] = field_value
+            
+            # 다음 필드로 이동
+            session["current_field_index"] += 1
+            
+            if session["current_field_index"] < len(fields):
+                next_field = fields[session["current_field_index"]]
+                # LLM이 다음 질문을 생성하도록 유도하거나, 여기에서 생성
+                next_message = f"\n\n다음으로 {next_field.get('label', '다음 항목')}에 대해 알려주세요."
+                response_message += next_message
+            else:
+                response_message += "\n\n🎉 모든 정보 입력이 완료되었습니다!"
         else:
-            response_message += "\n\n🎉 모든 정보 입력이 완료되었습니다!"
+            print(f"[DEBUG] 유효하지 않은 값으로 인식됨: {field_value}")
+            # 유효하지 않은 값이면 다음 단계로 넘어가지 않음
+            # 현재 필드에 머물면서 재입력 요청
+            print(f"[DEBUG] 유효하지 않은 값으로 인한 재입력 요청 - current_field_index 증가하지 않음")
+    else:
+        # value가 없거나 다른 경우에도 다음 단계로 넘어가지 않음
+        print(f"[DEBUG] 유효한 값이 없음 - current_field_index 증가하지 않음")
     
     response = ChatbotResponse(
         message=response_message,
@@ -1121,8 +1309,8 @@ async def generate_ai_assistant_response(user_input: str, field: Dict[str, Any],
     field_label = field.get("label", "")
     print(f"[DEBUG] 필드 키: {field_key}, 필드 라벨: {field_label}")
     
-    # 1) 키워드 기반 1차 분류
-    classification = classify_input(user_input)
+    # 1) 키워드 기반 1차 분류 (개선된 분류 함수 사용)
+    classification = classify_input_with_priority(user_input, field_key)
     print(f"[DEBUG] 분류 결과: {classification}")
     print(f"[DEBUG] 분류 타입: {classification.get('type')}")
     print(f"[DEBUG] 분류 카테고리: {classification.get('category')}")
@@ -1181,8 +1369,17 @@ async def generate_ai_assistant_response(user_input: str, field: Dict[str, Any],
         return response
     else:
         # 답변인 경우 (개선된 처리)
-        field_value = classification.get('value', user_input)
-        print(f"[DEBUG] 답변 처리 결과 - 필드: {field_key}, 값: {field_value}")
+        # classification에서 추출된 값이 있으면 사용, 없으면 user_input에서 추출 시도
+        if classification.get('value'):
+            field_value = classification['value']
+            field_category = classification.get('category', field_key)
+        else:
+            # classification에서 값이 없으면 user_input에서 추출 시도
+            field_config = get_field_config(field_key)
+            field_value = extract_field_value(user_input, field_key, field_config)
+            field_category = field_key
+        
+        print(f"[DEBUG] 답변 처리 결과 - 필드: {field_category}, 값: {field_value}")
         
         # 필드 업데이트 후 다음 질문 자동 생성
         next_question = ""
@@ -1242,7 +1439,7 @@ async def generate_ai_assistant_response(user_input: str, field: Dict[str, Any],
         response = {
             "message": response_message,
             "value": field_value,
-            "field": field_key,
+            "field": field_category,  # 분류된 필드명 사용
             "suggestions": next_suggestions,
             "confidence": classification['confidence'],
             "next_question": next_question
@@ -1290,12 +1487,25 @@ async def simulate_llm_response(user_input: str, current_field: str, session: Di
     if classification['type'] == 'question':
         # 질문인 경우 Gemini API 호출
         try:
+            # 대화 히스토리를 고려한 컨텍스트 생성
+            conversation_context = ""
+            if session.get("conversation_history"):
+                recent_messages = session["conversation_history"][-4:]  # 최근 4개 메시지만 사용
+                conversation_context = "\n".join([
+                    f"{msg['role']}: {msg['content']}" 
+                    for msg in recent_messages
+                ])
+            
             ai_assistant_context = f"""
 현재 채용 공고 작성 중입니다. 현재 필드: {current_field_label} ({current_field})
+
+최근 대화 내용:
+{conversation_context}
 
 사용자 질문: {user_input}
 
 이 질문에 대해 채용 공고 작성에 도움이 되는 실무적인 답변을 제공해주세요.
+답변 후에는 현재 필드 '{current_field_label}'에 대한 정보를 입력해주시면 됩니다.
 """
             ai_response = await call_gemini_api(ai_assistant_context)
             
@@ -1309,9 +1519,10 @@ async def simulate_llm_response(user_input: str, current_field: str, session: Di
                 "suggestions": [],
                 "confidence": classification['confidence'],
                 "items": items,
-                "show_item_selection": True  # 항목 선택 UI 표시
+                "show_item_selection": True,  # 항목 선택 UI 표시
+                "is_conversation": True  # 대화형 응답임을 표시
             }
-            print(f"[DEBUG] 질문 응답 (항목 선택 포함): {response}")
+            print(f"[DEBUG] 질문 응답 (대화형): {response}")
             return response
             
         except Exception as e:
@@ -1325,6 +1536,74 @@ async def simulate_llm_response(user_input: str, current_field: str, session: Di
                 "confidence": 0.5
             }
             return response
+    elif classification['type'] == 'conversational_answer':
+        # 대화형 입력에서 맥락/키워드를 캐치하여 필드 값 추출 시도
+        try:
+            # 대화 히스토리를 고려한 컨텍스트 생성
+            conversation_context = ""
+            if session.get("conversation_history"):
+                recent_messages = session["conversation_history"][-4:]  # 최근 4개 메시지만 사용
+                conversation_context = "\n".join([
+                    f"{msg['role']}: {msg['content']}"
+                    for msg in recent_messages
+                ])
+            
+            # LLM에게 대화형 입력에서 필드 값을 추출하도록 요청
+            extraction_prompt = f"""
+현재 채용 공고 작성 중입니다. 현재 필드: {current_field_label} ({current_field})
+
+최근 대화 내용:
+{conversation_context}
+
+사용자 입력: {user_input}
+
+이 대화형 입력에서 '{current_field_label}'에 대한 정보를 추출해주세요.
+만약 관련 정보가 없다면 "관련 정보 없음"이라고 답해주세요.
+추출된 정보만 간단히 답해주세요.
+"""
+            extracted_response = await call_gemini_api(extraction_prompt)
+            
+            # 추출된 응답이 유효한지 확인
+            if extracted_response and extracted_response.strip() and "관련 정보 없음" not in extracted_response:
+                # 추출된 값을 필드에 맞게 가공
+                field_config = get_field_config(current_field)
+                processed_value = extract_field_value(extracted_response, current_field, field_config)
+                
+                response = {
+                    "message": f"대화 내용에서 '{current_field_label}' 정보를 확인했습니다: {processed_value}",
+                    "value": processed_value,
+                    "field": current_field,
+                    "suggestions": [],
+                    "confidence": classification['confidence'],
+                    "is_conversation": False  # 필드 값이 추출되었으므로 대화형이 아님
+                }
+                print(f"[DEBUG] 대화형 입력에서 필드 값 추출 성공: {response}")
+                return response
+            else:
+                # 관련 정보가 없는 경우 대화형 응답
+                response = {
+                    "message": f"대화 내용을 확인했습니다. 현재 {current_field_label}에 대한 정보를 입력해주세요.",
+                    "value": None,
+                    "field": current_field,
+                    "suggestions": [],
+                    "confidence": classification['confidence'],
+                    "is_conversation": True
+                }
+                print(f"[DEBUG] 대화형 입력에서 관련 정보 없음: {response}")
+                return response
+                
+        except Exception as e:
+            print(f"[ERROR] 대화형 입력 처리 중 오류: {e}")
+            # 오류 발생 시 대화형 응답으로 처리
+            response = {
+                "message": f"대화 내용을 확인했습니다. 현재 {current_field_label}에 대한 정보를 입력해주세요.",
+                "value": None,
+                "field": current_field,
+                "suggestions": [],
+                "confidence": classification['confidence'],
+                "is_conversation": True
+            }
+            return response
     elif classification['type'] == 'chat':
         # 일상 대화 처리
         response = {
@@ -1336,12 +1615,51 @@ async def simulate_llm_response(user_input: str, current_field: str, session: Di
         }
         print(f"[DEBUG] 일상 대화 응답: {response}")
         return response
+    elif classification['type'] == 'unclear':
+        # 명확하지 않은 입력 처리 - 다시 말씀해주세요
+        field_suggestions = get_field_suggestions(current_field, {})
+        response = {
+            "message": f"죄송합니다. '{user_input}'이 무엇을 의미하는지 명확하지 않습니다. 현재 {current_field_label}에 대해 다시 말씀해주세요. 예시: {', '.join(field_suggestions[:3])}",
+            "value": None,
+            "field": current_field,
+            "suggestions": field_suggestions,
+            "confidence": classification['confidence'],
+            "is_unclear": True  # 명확하지 않은 입력임을 표시
+        }
+        print(f"[DEBUG] 명확하지 않은 입력 응답: {response}")
+        return response
     else:
         # 답변인 경우 (개선된 처리)
-        field_value = classification.get('value', user_input)
-        print(f"[DEBUG] 답변 처리 결과 - 필드: {current_field}, 값: {field_value}")
+        # classification에서 추출된 값이 있으면 사용, 없으면 user_input에서 추출 시도
+        if classification.get('value'):
+            field_value = classification['value']
+            field_category = classification.get('category', current_field)
+        else:
+            # classification에서 값이 없으면 user_input에서 추출 시도
+            field_config = get_field_config(current_field)
+            field_value = extract_field_value(user_input, current_field, field_config)
+            field_category = current_field
         
-        # 필드별 다음 질문 매핑
+        print(f"[DEBUG] 답변 처리 결과 - 필드: {field_category}, 값: {field_value}")
+        
+        # 값이 유효한지 확인 (빈 문자열이나 의미없는 값이 아닌지)
+        invalid_values = ["ai 채용공고 등록 도우미", "채용공고 등록 도우미", "ai 어시스턴트", "채용공고", "도우미", "ai"]
+        if not field_value or not field_value.strip() or field_value.lower() in invalid_values:
+            print(f"[DEBUG] 유효하지 않은 값으로 인식됨: {field_value}")
+            # 유효하지 않은 값이면 명확하지 않은 입력으로 처리
+            field_suggestions = get_field_suggestions(current_field, {})
+            response = {
+                "message": f"죄송합니다. '{user_input}'이 무엇을 의미하는지 명확하지 않습니다. 현재 {current_field_label}에 대해 다시 말씀해주세요. 예시: {', '.join(field_suggestions[:3])}",
+                "value": None,
+                "field": current_field,
+                "suggestions": field_suggestions,
+                "confidence": 0.7,
+                "is_unclear": True
+            }
+            print(f"[DEBUG] 유효하지 않은 값으로 인한 명확하지 않은 입력 응답: {response}")
+            return response
+        
+        # 필드별 다음 질문 매핑 (AI 어시스턴트 필드 순서에 맞춤)
         field_questions = {
             "department": {
                 "question": "몇 명을 채용하실 예정인가요?",
@@ -1356,18 +1674,10 @@ async def simulate_llm_response(user_input: str, current_field: str, session: Di
                 "suggestions": ["09:00-18:00", "10:00-19:00", "유연근무제", "시차출근제"]
             },
             "workHours": {
-                "question": "근무 요일은 어떻게 되나요?",
-                "suggestions": ["월-금", "월-토", "주5일", "주6일"]
-            },
-            "workDays": {
                 "question": "근무 위치는 어디인가요?",
                 "suggestions": ["서울", "부산", "대구", "인천", "대전", "광주", "울산"]
             },
             "locationCity": {
-                "question": "구체적인 지역을 알려주세요.",
-                "suggestions": ["강남구", "서초구", "마포구", "종로구", "중구"]
-            },
-            "locationDistrict": {
                 "question": "급여 조건은 어떻게 되나요?",
                 "suggestions": ["면접 후 협의", "3000만원", "4000만원", "5000만원", "6000만원"]
             },
@@ -1378,6 +1688,10 @@ async def simulate_llm_response(user_input: str, current_field: str, session: Di
             "deadline": {
                 "question": "연락처 이메일을 알려주세요.",
                 "suggestions": ["hr@company.com", "recruit@company.com", "인사팀 이메일"]
+            },
+            "contactEmail": {
+                "question": "모든 정보 입력이 완료되었습니다!",
+                "suggestions": []
             }
         }
         
@@ -1397,7 +1711,7 @@ async def simulate_llm_response(user_input: str, current_field: str, session: Di
         response = {
             "message": response_message,
             "value": field_value,
-            "field": current_field,  # 필드명을 명시적으로 설정
+            "field": field_category,  # 분류된 필드명 사용
             "suggestions": next_suggestions,
             "confidence": classification['confidence'],
             "next_question": next_question
@@ -1557,12 +1871,12 @@ def get_questions_for_page(page: str) -> List[Dict[str, Any]]:
         "job_posting": [
             {"field": "department", "question": "구인 부서를 알려주세요."},
             {"field": "headcount", "question": "채용 인원은 몇 명인가요?"},
-            {"field": "workType", "question": "어떤 업무를 담당하게 되나요?"},
+            {"field": "mainDuties", "question": "어떤 업무를 담당하게 되나요?"},
             {"field": "workHours", "question": "근무 시간은 어떻게 되나요?"},
-            {"field": "location", "question": "근무 위치는 어디인가요?"},
+            {"field": "locationCity", "question": "근무 위치는 어디인가요?"},
             {"field": "salary", "question": "급여 조건은 어떻게 되나요?"},
             {"field": "deadline", "question": "마감일은 언제인가요?"},
-            {"field": "email", "question": "연락처 이메일을 알려주세요."}
+            {"field": "contactEmail", "question": "연락처 이메일을 알려주세요."}
         ]
     }
     questions = questions_map.get(page, [])
@@ -1756,9 +2070,11 @@ async def chat_endpoint(request: ChatbotRequest):
 
 def classify_input_with_priority(text: str, current_field: str = None) -> dict:
     """
-    우선순위 기반 분류: 키워드 > 맥락
-    1단계: 명확한 키워드 매칭
-    2단계: 맥락 분석 (질문형 vs 답변형)
+    개선된 분류 로직: 명확한 조건에 해당하지 않으면 다시 말씀해주세요
+    1단계: 명확한 질문 감지
+    2단계: 현재 필드에 대한 명확한 답변 감지
+    2.5단계: 대화형 입력에서 맥락/키워드 캐치 시도
+    3단계: 명확하지 않은 경우 "다시 말씀해주세요" 응답
     """
     text_lower = text.lower()
     text_length = len(text.strip())
@@ -1767,96 +2083,229 @@ def classify_input_with_priority(text: str, current_field: str = None) -> dict:
     print(f"[DEBUG] 입력 텍스트: {text}")
     print(f"[DEBUG] 현재 필드: {current_field}")
     
-    # 1단계: 명확한 키워드 매칭 (최우선)
-    
-    # 1-1. 명확한 질문 키워드 (절대적 우선순위)
-    strong_question_keywords = [
-        "어떻게", "왜", "무엇", "뭐", "언제", "어디", "궁금", "알려줘", "설명해줘",
-        "몇명", "몇 명", "얼마나", "어느 정도", "어떤 정도", "어떤", "무슨",
-        "있을까", "있나요", "인가요", "일까", "될까", "할까", "어때", "어떠"
+    # 1단계: 명확한 질문 감지
+    question_indicators = [
+        # 의문사
+        "어떻게", "왜", "무엇", "뭐", "언제", "어디", "어느", "어떤", "무슨",
+        # 질문 어미
+        "있을까", "있나요", "인가요", "일까", "될까", "할까", "어때", "어떠",
+        # 질문 조사
+        "?", "인가", "일까", "될까", "할까",
+        # 구체적 질문 패턴
+        "몇 명", "몇명", "얼마나", "어느 정도", "어떤 정도",
+        # 추천/제안 요청
+        "추천", "제안", "추천좀", "제안좀", "추천해", "제안해", "추천해줘", "제안해줘",
+        "추천해주세요", "제안해주세요", "추천해주시면", "제안해주시면",
+        # 정보 요청
+        "알려줘", "보여줘", "도와줘", "좀해", "좀 해", "알려주세요", "보여주세요", "도와주세요",
+        # 대화형 질문 패턴
+        "그럼", "그러면", "혹시", "예를 들어", "어떤가", "좋을까", "될까", "할까",
+        "어떤가요", "좋을까요", "될까요", "할까요", "어떻게요", "어떤지", "어떤지요"
     ]
     
-    matched_strong_questions = [kw for kw in strong_question_keywords if kw in text_lower]
-    if matched_strong_questions:
-        print(f"[DEBUG] 1단계 - 강한 질문 키워드 감지: {matched_strong_questions}")
-        return {'type': 'question', 'category': 'strong_question', 'confidence': 0.95}
+    # 명확한 질문 키워드가 포함되어 있거나 "?"로 끝나는 경우
+    if any(indicator in text_lower for indicator in question_indicators) or text.strip().endswith("?"):
+        matched_indicators = [ind for ind in question_indicators if ind in text_lower]
+        print(f"[DEBUG] 1단계 - 명확한 질문 감지: {matched_indicators}")
+        return {'type': 'question', 'category': 'clear_question', 'confidence': 0.95}
     
-    # 1-2. 명확한 답변 키워드 (현재 필드 기준)
+    # 2단계: 현재 필드에 대한 명확한 답변 감지
     if current_field:
+        field_config = get_field_config(current_field)
         field_keywords = get_field_keywords(current_field)
-        matched_answer_keywords = [kw for kw in field_keywords if kw in text_lower]
-        if matched_answer_keywords:
-            print(f"[DEBUG] 1단계 - 답변 키워드 감지: {matched_answer_keywords}")
-            # 키워드가 있더라도 맥락 검토 필요
-            pass
-    
-    # 2단계: 맥락 분석 (질문형 vs 답변형)
-    
-    # 2-1. 질문형 맥락 분석
-    question_patterns = [
-        # 의문사 패턴
-        r'\b(어떻게|왜|무엇|뭐|언제|어디|어느|어떤|무슨)\b',
-        # 추측/제안 패턴
-        r'\b(있을까|있나요|인가요|일까|될까|할까|어때|어떠)\b',
-        # 비교/선택 패턴
-        r'\b(어느\s*것|어떤\s*것|무슨\s*것)\b',
-        # 조건부 질문 패턴
-        r'\b(만약|만일|혹시|혹은)\b.*\b(어떻게|어떤|무슨)\b',
-        # 제안형 질문 패턴
-        r'\b(그럼|그렇다면|그러면)\b.*\b(어떻게|어떤|무슨|어때)\b'
-    ]
-    
-    import re
-    for pattern in question_patterns:
-        if re.search(pattern, text_lower):
-            print(f"[DEBUG] 2단계 - 질문형 맥락 감지: {pattern}")
-            return {'type': 'question', 'category': 'context_question', 'confidence': 0.9}
-    
-    # 2-2. 답변형 맥락 분석
-    answer_patterns = [
-        # 확정적 답변 패턴
-        r'\b(으로|로|입니다|입니다|입니다|입니다)\b',
-        # 구체적 수치/값 패턴
-        r'\b(\d+명|\d+만원|\d+시|\d+분)\b',
-        # 명령/요청 패턴
-        r'\b(해줘|해주세요|해주시면|해주시고)\b',
-        # 동의/확인 패턴
-        r'\b(네|예|좋아|알겠|그래|응|오케이)\b'
-    ]
-    
-    for pattern in answer_patterns:
-        if re.search(pattern, text_lower):
-            print(f"[DEBUG] 2단계 - 답변형 맥락 감지: {pattern}")
-            # 답변형이지만 추가 검증 필요
-            pass
-    
-    # 3단계: 최종 분류
-    if current_field and has_field_keywords(text, current_field):
-        if is_valid_answer_for_field(text, current_field):
-            extracted_value = extract_field_value(text, current_field, get_field_config(current_field))
-            print(f"[DEBUG] 3단계 - 답변으로 최종 분류, 추출값: {extracted_value}")
+        
+        # 현재 필드와 관련된 키워드가 포함되어 있는지 확인
+        matched_field_keywords = [kw for kw in field_keywords if kw in text_lower]
+        
+        if matched_field_keywords:
+            print(f"[DEBUG] 2단계 - 필드 관련 키워드 감지: {matched_field_keywords}")
+            
+            # 추가 검증: 실제로 해당 필드에 대한 답변인지 확인
+            if is_valid_answer_for_field(text, current_field):
+                extracted_value = extract_field_value(text, current_field, field_config)
+                print(f"[DEBUG] 2단계 - 명확한 답변으로 분류, 추출값: {extracted_value}")
+                return {
+                    'type': 'answer',
+                    'category': current_field,
+                    'value': extracted_value,
+                    'confidence': 0.9
+                }
+            else:
+                print(f"[DEBUG] 2단계 - 키워드는 있지만 유효하지 않은 답변")
+        else:
+            print(f"[DEBUG] 2단계 - 필드 관련 키워드 없음")
+    else:
+        # 현재 필드가 없는 경우, 더 정교한 키워드 매칭 시도
+        print(f"[DEBUG] 2단계 - 현재 필드가 없음, 정교한 키워드 매칭 시도")
+        
+        # 우선순위가 높은 필드부터 검색 (더 구체적인 키워드를 가진 필드 우선)
+        priority_fields = ['mainDuties', 'headcount', 'salary', 'workHours', 'locationCity', 'deadline', 'contactEmail', 'department']
+        
+        # mainDuties 관련 구체적 키워드 먼저 확인 (우선순위 최고)
+        mainduties_specific_keywords = ['웹개발', '앱개발', '모바일개발', '서버개발', '프론트엔드', '백엔드', '풀스택', 
+                                      'UI/UX', 'UI디자인', 'UX디자인', '그래픽디자인', '편집디자인', '패키지디자인',
+                                      '브랜드마케팅', '디지털마케팅', '콘텐츠마케팅', 'SNS마케팅', '퍼포먼스마케팅',
+                                      '데이터분석', 'AI개발', '프로그래밍', '코딩']
+        
+        if any(kw in text_lower for kw in mainduties_specific_keywords):
+            field_config = get_field_config('mainDuties')
+            extracted_value = extract_field_value(text, 'mainDuties', field_config)
+            print(f"[DEBUG] 2단계 - mainDuties 필드 구체적 키워드로 분류, 추출값: {extracted_value}")
             return {
                 'type': 'answer',
-                'category': current_field,
+                'category': 'mainDuties',
                 'value': extracted_value,
-                'confidence': 0.85
+                'confidence': 0.95
+            }
+        
+        # headcount 관련 키워드 확인 (우선순위 높음)
+        headcount_keywords = ['명', '인원', '사람', '1명', '2명', '3명', '4명', '5명', '6명', '7명', '8명', '9명', '10명',
+                            '한 명', '두 명', '세 명', '네 명', '다섯 명', '여섯 명', '일곱 명', '여덟 명', '아홉 명', '열 명']
+        if any(kw in text_lower for kw in headcount_keywords):
+            field_config = get_field_config('headcount')
+            extracted_value = extract_field_value(text, 'headcount', field_config)
+            print(f"[DEBUG] 2단계 - headcount 필드 키워드로 분류, 추출값: {extracted_value}")
+            return {
+                'type': 'answer',
+                'category': 'headcount',
+                'value': extracted_value,
+                'confidence': 0.9
+            }
+        
+        # workHours 관련 키워드 확인
+        workhours_keywords = ['시', '분', '시간', '09:00', '10:00', '18:00', '19:00', '유연근무', '재택근무', '시차출근',
+                            '오전', '오후', '아침', '저녁', '평일', '주말', '주중']
+        if any(kw in text_lower for kw in workhours_keywords):
+            field_config = get_field_config('workHours')
+            extracted_value = extract_field_value(text, 'workHours', field_config)
+            print(f"[DEBUG] 2단계 - workHours 필드 키워드로 분류, 추출값: {extracted_value}")
+            return {
+                'type': 'answer',
+                'category': 'workHours',
+                'value': extracted_value,
+                'confidence': 0.9
+            }
+        
+        for field in priority_fields:
+            field_keywords = get_field_keywords(field)
+            matched_field_keywords = [kw for kw in field_keywords if kw in text_lower]
+            
+            if matched_field_keywords:
+                print(f"[DEBUG] 2단계 - {field} 필드 키워드 감지: {matched_field_keywords}")
+                field_config = get_field_config(field)
+                
+                if is_valid_answer_for_field(text, field):
+                    extracted_value = extract_field_value(text, field, field_config)
+                    print(f"[DEBUG] 2단계 - {field} 필드 명확한 답변으로 분류, 추출값: {extracted_value}")
+                    return {
+                        'type': 'answer',
+                        'category': field,
+                        'value': extracted_value,
+                        'confidence': 0.85
+                    }
+    
+    # 2.5단계: 대화형 입력에서 맥락/키워드 캐치 시도 (개선된 로직)
+    if text_length > 5:  # 충분한 길이의 대화형 입력인 경우 (current_field 조건 제거)
+        print(f"[DEBUG] 2.5단계 - 대화형 입력에서 맥락/키워드 캐치 시도")
+        
+        # 혼합형 입력인지 확인 (답변 + 질문)
+        has_answer_part = False
+        has_question_part = False
+        
+        # 답변 부분이 있는지 확인
+        field_config = get_field_config(current_field)
+        field_keywords = get_field_keywords(current_field)
+        matched_field_keywords = [kw for kw in field_keywords if kw in text_lower]
+        
+        if matched_field_keywords:
+            has_answer_part = True
+            print(f"[DEBUG] 2.5단계 - 답변 부분 감지: {matched_field_keywords}")
+        
+        # 질문 부분이 있는지 확인
+        if any(indicator in text_lower for indicator in question_indicators) or text.strip().endswith("?"):
+            has_question_part = True
+            print(f"[DEBUG] 2.5단계 - 질문 부분 감지")
+        
+        # 혼합형 입력인 경우
+        if has_answer_part and has_question_part:
+            print(f"[DEBUG] 2.5단계 - 혼합형 입력으로 분류")
+            return {
+                'type': 'conversational_answer',
+                'category': 'mixed_input',
+                'confidence': 0.8
+            }
+        
+        # 대화형 답변인 경우
+        elif has_answer_part:
+            print(f"[DEBUG] 2.5단계 - 대화형 답변으로 분류")
+            return {
+                'type': 'conversational_answer',
+                'category': 'conversational_answer',
+                'confidence': 0.7
+            }
+        
+        # 대화형 질문인 경우
+        elif has_question_part:
+            print(f"[DEBUG] 2.5단계 - 대화형 질문으로 분류")
+            return {
+                'type': 'question',
+                'category': 'conversational_question',
+                'confidence': 0.7
+            }
+        
+        # 일반 대화형 입력인 경우
+        else:
+            print(f"[DEBUG] 2.5단계 - 일반 대화형 입력으로 분류")
+            return {
+                'type': 'conversational_answer',
+                'category': 'context_extraction',
+                'confidence': 0.6
             }
     
-    # 기본값: 질문으로 분류 (안전한 기본값)
-    print(f"[DEBUG] 3단계 - 기본값: 질문으로 분류")
-    return {'type': 'question', 'category': 'general', 'confidence': 0.7}
+    # 3단계: 명확하지 않은 경우 - 다시 말씀해주세요
+    print(f"[DEBUG] 3단계 - 명확하지 않은 입력, 다시 말씀해주세요 응답")
+    return {'type': 'unclear', 'category': 'clarification_needed', 'confidence': 0.8}
 
 def get_field_keywords(field: str) -> list:
-    """필드별 키워드 반환"""
+    """필드별 키워드 반환 (대화형 입력 고려)"""
     field_keywords = {
-        'department': ['개발팀', '마케팅팀', '영업팀', '디자인팀', '기획팀', '인사팀', '개발', '마케팅', '영업', '디자인', '기획', '인사'],
-        'headcount': ['명', '인원', '사람', '1명', '2명', '3명', '4명', '5명', '6명', '7명', '8명', '9명', '10명'],
-        'mainDuties': ['개발', '디자인', '마케팅', '영업', '기획', '관리', '운영', '분석', '설계', '테스트', '유지보수'],
-        'workHours': ['시', '분', '시간', '09:00', '10:00', '18:00', '19:00', '유연근무', '재택근무'],
-        'location': ['서울', '부산', '대구', '인천', '대전', '광주', '울산', '세종', '경기', '강원', '충북', '충남', '전북', '전남', '경북', '경남', '제주'],
-        'salary': ['만원', '원', '연봉', '월급', '급여', '보수', '임금', '면접', '협의'],
-        'deadline': ['년', '월', '일', '마감', '지원', '채용', '마감일'],
-        'contactEmail': ['@', '이메일', 'email', '메일', 'mail']
+        'department': [
+            '개발팀', '마케팅팀', '영업팀', '디자인팀', '기획팀', '인사팀', 
+            '개발자', '마케터', '영업사원', '디자이너', '기획자', '인사담당자',
+            '프로그래머', '코더', 'UX디자이너', 'UI디자이너', '그래픽디자이너'
+        ],
+        'headcount': [
+            '명', '인원', '사람', '1명', '2명', '3명', '4명', '5명', '6명', '7명', '8명', '9명', '10명',
+            '한 명', '두 명', '세 명', '네 명', '다섯 명', '여섯 명', '일곱 명', '여덟 명', '아홉 명', '열 명'
+        ],
+        'mainDuties': [
+            '프로그래밍', '코딩', '웹개발', '앱개발', '백엔드', '프론트엔드', '풀스택',
+            'UI/UX', '그래픽디자인', '브랜딩', '광고', '홍보', '콘텐츠', 'SNS',
+            '고객관리', '매출관리', '전략기획', '사업기획', '제품기획',
+            '웹개발', '앱개발', '모바일개발', '서버개발', '데이터분석', 'AI개발',
+            'UI디자인', 'UX디자인', '그래픽디자인', '편집디자인', '패키지디자인',
+            '브랜드마케팅', '디지털마케팅', '콘텐츠마케팅', 'SNS마케팅', '퍼포먼스마케팅'
+        ],
+        'workHours': [
+            '시', '분', '시간', '09:00', '10:00', '18:00', '19:00', '유연근무', '재택근무', '시차출근',
+            '오전', '오후', '아침', '저녁', '평일', '주말', '주중'
+        ],
+        'locationCity': [
+            '서울', '부산', '대구', '인천', '대전', '광주', '울산', '세종', 
+            '경기', '강원', '충북', '충남', '전북', '전남', '경북', '경남', '제주',
+            '강남', '강북', '서초', '송파', '마포', '용산', '영등포', '동대문', '중구'
+        ],
+        'salary': [
+            '만원', '원', '연봉', '월급', '급여', '보수', '임금', '면접', '협의',
+            '3000', '4000', '5000', '6000', '7000', '8000', '9000', '10000'
+        ],
+        'deadline': [
+            '년', '월', '일', '마감', '지원', '채용', '마감일', '상시채용', '채용시마감',
+            '2024', '2025', '12월', '11월', '10월', '9월'
+        ],
+        'contactEmail': [
+            '@', '이메일', 'email', '메일', 'mail', 'hr', 'recruit', '인사', '채용'
+        ]
     }
     return field_keywords.get(field, [])
 

@@ -901,15 +901,7 @@ const EnhancedModalChatbot = ({
   const handleAIResponse = useCallback(async (userInput) => {
     if (!userInput.trim()) return;
     
-    // 사용자 메시지를 먼저 추가하여 즉시 UI에 반영
-    const userMessage = {
-      type: 'user',
-      content: userInput,
-      timestamp: new Date(),
-      id: `user-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`
-    };
-    
-    setMessages(prev => [...prev, userMessage]);
+    // 입력값을 임시로 저장하고 UI는 즉시 업데이트하지 않음
     setInputValue('');
     setIsLoading(true);
     
@@ -920,6 +912,14 @@ const EnhancedModalChatbot = ({
       });
       
       console.log('[EnhancedModalChatbot] AI 응답:', response);
+      
+      // 사용자 메시지 추가 (AI 응답 후에 추가)
+      const userMessage = {
+        type: 'user',
+        content: userInput,
+        timestamp: new Date(),
+        id: `user-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`
+      };
       
       // AI 응답 메시지 추가
       const aiMessage = {
@@ -932,10 +932,10 @@ const EnhancedModalChatbot = ({
         suggestions: response.suggestions || []
       };
       
-      setMessages(prev => [...prev, aiMessage]);
+      setMessages(prev => [...prev, userMessage, aiMessage]);
       
-      // 필드 업데이트가 있는 경우 처리
-      if (response.field && response.value && onFieldUpdate) {
+      // 필드 업데이트가 있는 경우 처리 (대화형 응답이 아닌 경우에만)
+      if (response.field && response.value && !response.is_conversation && onFieldUpdate) {
         console.log('[EnhancedModalChatbot] 필드 업데이트 실행:', response.field, response.value);
         onFieldUpdate(response.field, response.value);
         
@@ -954,26 +954,13 @@ const EnhancedModalChatbot = ({
         }
         
         console.log('[EnhancedModalChatbot] 필드 업데이트 완료:', response.field, response.value);
+      } else if (response.is_conversation) {
+        // 대화형 응답인 경우 필드 업데이트하지 않음
+        console.log('[EnhancedModalChatbot] 대화형 응답 - 필드 업데이트 없음');
       } else {
-        // 필드 업데이트가 없는 경우에도 사용자 입력을 현재 필드에 반영
-        if (currentField && onFieldUpdate) {
-          console.log('[EnhancedModalChatbot] 사용자 입력을 현재 필드에 반영:', currentField.key, userInput);
-          onFieldUpdate(currentField.key, userInput);
-          
-          // 사용자 입력 후 다음 필드로 자동 이동
-          const currentFieldIndex = fields.findIndex(f => f.key === currentField.key);
-          if (currentFieldIndex !== -1 && currentFieldIndex < fields.length - 1) {
-            const nextField = fields[currentFieldIndex + 1];
-            setCurrentField(nextField);
-            // 다음 필드에 대한 추천 업데이트
-            setAutoFillSuggestions(getFieldSuggestions(nextField.key, formData));
-          } else {
-            // 모든 필드가 완료되면 currentField를 null로 설정
-            setCurrentField(null);
-            setAutoFillSuggestions([]);
-            setIsSuggestionsExpanded(false);
-          }
-        }
+        // 필드 업데이트가 없는 경우 (명확하지 않은 입력 등)
+        console.log('[EnhancedModalChatbot] 필드 업데이트 없음 - 명확하지 않은 입력 또는 유효하지 않은 값');
+        // 명확하지 않은 입력의 경우 필드에 반영하지 않음
       }
       
       // 경력 관련 입력 감지 및 자동 매핑
@@ -1005,13 +992,7 @@ const EnhancedModalChatbot = ({
         }
       }
       
-      // 강제로 필드 업데이트 확인
-      if (currentField && onFieldUpdate) {
-        setTimeout(() => {
-          console.log('[EnhancedModalChatbot] 강제 필드 업데이트 확인:', currentField.key, userInput);
-          onFieldUpdate(currentField.key, userInput);
-        }, 100);
-      }
+      // 강제 필드 업데이트는 제거 (명확하지 않은 입력 시 필드에 반영하지 않음)
       
       // 선택 가능한 항목이 있는 경우 처리
       if (response.response_type === 'selection' && response.selectable_items && response.selectable_items.length > 0) {
@@ -1030,11 +1011,7 @@ const EnhancedModalChatbot = ({
     } catch (error) {
       console.error('[EnhancedModalChatbot] AI 응답 처리 오류:', error);
       
-      // 오류 발생 시에도 사용자 입력을 현재 필드에 반영
-      if (currentField && onFieldUpdate) {
-        console.log('[EnhancedModalChatbot] 오류 발생 시에도 필드 업데이트:', currentField.key, userInput);
-        onFieldUpdate(currentField.key, userInput);
-      }
+      // 오류 발생 시에는 필드 업데이트하지 않음 (명확하지 않은 입력과 동일하게 처리)
       
       const errorMessage = {
         type: 'bot',
@@ -1474,17 +1451,8 @@ const EnhancedModalChatbot = ({
                     const newValue = e.target.value;
                     setInputValue(newValue);
                     
-                    // 실시간 필드 업데이트 (입력 중에도 반영)
-                    if (currentField && newValue.trim().length > 0) {
-                      // 약간의 지연을 두어 타이핑 중에는 업데이트하지 않음
-                      clearTimeout(inputUpdateTimeout.current);
-                      inputUpdateTimeout.current = setTimeout(() => {
-                        if (onFieldUpdate) {
-                          console.log('[EnhancedModalChatbot] 실시간 필드 업데이트:', currentField.key, newValue.trim());
-                          onFieldUpdate(currentField.key, newValue.trim());
-                        }
-                      }, 1000); // 1초 후 업데이트
-                    }
+                    // 실시간 필드 업데이트는 제거 (명확하지 않은 입력 시 필드에 반영하지 않음)
+                    // 실시간 업데이트는 AI 응답을 통해만 처리
                   }}
                   onKeyDown={handleKeyPress}
                   placeholder="궁금한 점을 물어보거나 답변을 입력하세요..."
