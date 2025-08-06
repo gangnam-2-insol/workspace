@@ -1,0 +1,5 @@
+# MongoDB 연결 설정
+MONGODB_URI=mongodb://localhost:27017/hireme-client
+
+# Gemini API 키 (실제 API 키로 교체하세요)
+GEMINI_API_KEY=AIzaSyA576KevMngRnA7VyVnG7N5umBbbjV5Q3I
