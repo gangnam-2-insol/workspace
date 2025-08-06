@@ -381,9 +381,15 @@ const JobPostingRegistration = () => {
     const handleStartAIAssistant = () => {
       console.log('=== AI 도우미 시작됨 ===');
       console.log('현재 상태: showTextRegistration =', showTextRegistration);
+      console.log('이벤트 리스너가 제대로 등록되었는지 확인');
       
       setShowTextRegistration(true);
-      console.log('텍스트 기반 등록 모달 열기 완료');
+      console.log('텍스트 기반 등록 모달 열기 완료 - showTextRegistration = true로 설정됨');
+      
+      // 즉시 상태 확인
+      setTimeout(() => {
+        console.log('1초 후 상태 확인: showTextRegistration =', showTextRegistration);
+      }, 1000);
       
       // 2초 후 자동으로 AI 챗봇 시작
       setTimeout(() => {

@@ -7,6 +7,396 @@ import json
 from datetime import datetime
 import os
 from dotenv import load_dotenv
+import traceback
+import re
+import google.generativeai as genai
+import numpy as np # numpy 라이브러리 추가
+
+# 환경 변수 로드
+load_dotenv()
+
+# Gemini 모델 초기화
+try:
+    api_key = os.getenv("GOOGLE_API_KEY")
+    if not api_key:
+        raise ValueError("GOOGLE_API_KEY 환경 변수가 설정되지 않았습니다.")
+    genai.configure(api_key=api_key)
+    model = genai.GenerativeModel('gemini-1.5-pro')
+    embedding_model = 'models/text-embedding-004' # 임베딩 모델 정의
+    print("Gemini 모델 초기화 성공")
+except Exception as e:
+    print(f"Gemini 모델 초기화 실패: {e}")
+    model = None
+
+# ---- RAG를 위한 임시 벡터 저장 및 검색 로직 추가 시작 ----
+
+# 임시로 사용할 문서 데이터
+temporary_docs = [
+    "Gemini 모델은 텍스트, 이미지 등 다양한 유형의 데이터를 처리할 수 있습니다. 멀티모달 기능을 통해 복잡한 질문에도 답변할 수 있습니다.",
+    "Gemini 1.5 Pro는 1백만 토큰의 컨텍스트 윈도우를 지원하여 방대한 양의 정보를 한 번에 처리하고 이해할 수 있습니다.",
+    "Gemini API는 Google AI Studio와 Google Cloud Vertex AI에서 사용할 수 있으며, 다양한 개발 환경을 지원합니다.",
+    "RAG(Retrieval-Augmented Generation)는 외부 데이터를 활용해 LLM의 답변 품질을 높이는 기술입니다. 이를 통해 LLM은 학습되지 않은 최신 정보에도 답변할 수 있습니다.",
+    "벡터 검색은 텍스트를 숫자의 배열(벡터)로 변환하고, 이 벡터 간의 유사도를 계산하여 가장 관련성이 높은 문서를 찾는 기술입니다.",
+    "코사인 유사도(Cosine Similarity)는 두 벡터의 방향이 얼마나 일치하는지를 나타내는 지표로, 벡터 검색에서 문서 간의 유사성을 측정하는 데 널리 사용됩니다."
+]
+
+# 문서 벡터화 (초기화 시 한 번만 실행)
+try:
+    temporary_embeddings = genai.embed_content(
+        model=embedding_model,
+        content=temporary_docs,
+        task_type="RETRIEVAL_DOCUMENT"
+    )['embedding']
+    temporary_embeddings_np = np.array(temporary_embeddings)
+    print("임시 문서 임베딩 생성 성공")
+except Exception as e:
+    print(f"임시 문서 임베딩 생성 실패: {e}")
+    temporary_embeddings_np = None
+
+async def find_relevant_document(user_query: str) -> str:
+    """
+    사용자 입력과 가장 유사한 임시 문서를 찾아 반환합니다.
+    """
+    if temporary_embeddings_np is None or not temporary_docs:
+        print("[WARNING] 임시 문서 또는 임베딩이 없어 RAG를 사용할 수 없습니다.")
+        return ""
+
+    try:
+        # 사용자 질문 벡터화
+        query_embedding = (await genai.embed_content_async(
+            model=embedding_model,
+            content=user_query,
+            task_type="RETRIEVAL_QUERY"
+        ))['embedding']
+        
+        query_embedding_np = np.array(query_embedding)
+        
+        # 코사인 유사도 계산
+        # (A · B) / (||A|| * ||B||)
+        similarities = np.dot(query_embedding_np, temporary_embeddings_np.T)
+        
+        # 가장 높은 유사도를 가진 문서의 인덱스 찾기
+        most_similar_index = np.argmax(similarities)
+        
+        # 가장 유사한 문서 반환
+        return temporary_docs[most_similar_index]
+    except Exception as e:
+        print(f"[ERROR] 유사 문서 검색 실패: {e}")
+        traceback.print_exc()
+        return ""
+
+# ---- RAG를 위한 임시 벡터 저장 및 검색 로직 추가 끝 ----
+
+# 의도 감지 유틸리티
+HARDCODED_FIELDS = {
+    "UI/UX 디자인": "지원 분야: UI/UX 디자인으로 설정되었습니다.",
+    "그래픽 디자인": "지원 분야: 그래픽 디자인으로 설정되었습니다.",
+    "Figma 경험": "사용 툴: Figma로 등록했습니다.",
+    "개발팀": "부서: 개발팀으로 설정되었습니다.",
+    "마케팅팀": "부서: 마케팅팀으로 설정되었습니다.",
+    "영업팀": "부서: 영업팀으로 설정되었습니다.",
+    "디자인팀": "부서: 디자인팀으로 설정되었습니다.",
+}
+
+def classify_input(text: str) -> dict:
+    """
+    키워드 기반 1차 분류 함수 (개선된 버전)
+    """
+    text_lower = text.lower()
+    text_length = len(text.strip())
+    
+    # 질문 키워드 감지 (가장 먼저 체크)
+    question_keywords = [
+        "어떻게", "왜", "무엇", "뭐", "언제", "어디", "추천", "기준", "장점", "단점", "차이", 
+        "있을까", "있나요", "어떤", "무슨", "궁금", "알려줘", "설명해줘", "몇명", "몇 명", 
+        "얼마나", "어느 정도", "어떤 정도", "좋을까", "될까", "할까", "인가요", "일까",
+        "어때", "어떠", "어떻", "어떤가", "어떤지", "어떤지요", "어떤가요", "어떤지요",
+        "어떻게", "어떡", "어떻", "어떤", "어떤지", "어떤가", "어떤지요", "어떤가요"
+    ]
+    
+    # 질문 키워드가 포함되어 있거나 문장이 "?"로 끝나는 경우
+    if any(keyword in text_lower for keyword in question_keywords) or text.strip().endswith("?"):
+        matched_keywords = [kw for kw in question_keywords if kw in text_lower]
+        print(f"[DEBUG] 질문으로 분류됨 - 매칭된 질문 키워드: {matched_keywords}")
+        return {'type': 'question', 'category': 'general', 'confidence': 0.8}
+    
+    # 긴 텍스트는 추천문구로 간주 (주요업무 등)
+    # 단, 부서 관련 키워드가 포함된 긴 문구는 부서가 아닌 주요업무로 처리
+    if text_length > 30:
+        # 마케팅, 브랜드, 전략 등의 키워드가 포함된 긴 문구는 주요업무로 분류
+        business_keywords = ["마케팅", "브랜드", "전략", "개발", "디자인", "기획", "분석", "관리", "운영", "실행", "수립"]
+        if any(keyword in text_lower for keyword in business_keywords):
+            return {'type': 'answer', 'category': '주요업무', 'confidence': 0.9}
+        else:
+            return {'type': 'answer', 'category': '추천문구', 'confidence': 0.9}
+    
+    # 채용 관련 키워드 분류
+    if any(keyword in text_lower for keyword in ["채용 인원", "몇 명", "인원수", "채용인원"]):
+        return {'type': 'question', 'category': '채용 인원', 'confidence': 0.8}
+    
+    if any(keyword in text_lower for keyword in ["주요 업무", "업무 내용", "담당 업무", "직무"]):
+        return {'type': 'question', 'category': '주요 업무', 'confidence': 0.8}
+    
+    if any(keyword in text_lower for keyword in ["근무 시간", "근무시간", "출근 시간", "퇴근 시간"]):
+        return {'type': 'question', 'category': '근무 시간', 'confidence': 0.8}
+    
+    if any(keyword in text_lower for keyword in ["급여", "연봉", "월급", "보수", "임금"]):
+        return {'type': 'question', 'category': '급여 조건', 'confidence': 0.8}
+    
+    if any(keyword in text_lower for keyword in ["근무 위치", "근무지", "사무실", "오피스"]):
+        return {'type': 'question', 'category': '근무 위치', 'confidence': 0.8}
+    
+    if any(keyword in text_lower for keyword in ["마감일", "지원 마감", "채용 마감", "마감"]):
+        return {'type': 'question', 'category': '마감일', 'confidence': 0.8}
+    
+    if any(keyword in text_lower for keyword in ["이메일", "연락처", "contact", "email"]):
+        return {'type': 'question', 'category': '연락처 이메일', 'confidence': 0.8}
+    
+    # 부서 관련 키워드 (팀 없이도 인식)
+    if any(keyword in text_lower for keyword in ["개발팀", "개발", "프로그래밍", "코딩", "개발자"]):
+        return {'type': 'field', 'category': '부서', 'value': '개발팀', 'confidence': 0.9}
+    
+    if any(keyword in text_lower for keyword in ["마케팅팀", "마케팅", "홍보", "광고", "마케터"]):
+        return {'type': 'field', 'category': '부서', 'value': '마케팅팀', 'confidence': 0.9}
+    
+    if any(keyword in text_lower for keyword in ["영업팀", "영업", "세일즈", "영업사원"]):
+        return {'type': 'field', 'category': '부서', 'value': '영업팀', 'confidence': 0.9}
+    
+    if any(keyword in text_lower for keyword in ["디자인팀", "디자인", "UI/UX", "그래픽", "디자이너"]):
+        return {'type': 'field', 'category': '부서', 'value': '디자인팀', 'confidence': 0.9}
+    
+    if any(keyword in text_lower for keyword in ["기획팀", "기획", "기획자", "PM", "프로덕트"]):
+        return {'type': 'field', 'category': '부서', 'value': '기획팀', 'confidence': 0.9}
+    
+    if any(keyword in text_lower for keyword in ["인사팀", "인사", "HR", "인사담당", "채용"]):
+        return {'type': 'field', 'category': '부서', 'value': '인사팀', 'confidence': 0.9}
+    
+    # 일상 대화 키워드
+    chat_keywords = ["안녕", "반가워", "고마워", "감사", "좋아", "싫어", "그래", "응", "네", "아니"]
+    if any(keyword in text_lower for keyword in chat_keywords):
+        return {'type': 'chat', 'category': '일상대화', 'confidence': 0.7}
+    
+    # 기본값: 답변으로 처리
+    return {'type': 'answer', 'category': 'general', 'confidence': 0.6}
+
+def classify_input_with_context(text: str, current_field: str = None) -> dict:
+    """
+    현재 필드 컨텍스트를 고려한 분류 함수
+    """
+    text_lower = text.lower()
+    text_length = len(text.strip())
+    
+    print(f"[DEBUG] ===== classify_input_with_context 시작 =====")
+    print(f"[DEBUG] 입력 텍스트: {text}")
+    print(f"[DEBUG] 현재 필드: {current_field}")
+    
+    # 필드별 주 카테고리 매칭
+    field_categories = {
+        'department': {
+            'keywords': ['개발팀', '마케팅팀', '영업팀', '디자인팀', '기획팀', '인사팀', '개발', '마케팅', '영업', '디자인', '기획', '인사'],
+            'extract_value': True
+        },
+        'headcount': {
+            'keywords': ['명', '인원', '사람', '명', '1명', '2명', '3명', '4명', '5명', '6명', '7명', '8명', '9명', '10명'],
+            'extract_value': True,
+            'extract_number': True
+        },
+        'mainDuties': {
+            'keywords': ['개발', '디자인', '마케팅', '영업', '기획', '관리', '운영', '분석', '설계', '테스트', '유지보수'],
+            'extract_value': True
+        },
+        'workHours': {
+            'keywords': ['시', '분', '시간', '09:00', '10:00', '18:00', '19:00', '유연근무', '재택근무'],
+            'extract_value': True
+        },
+        'location': {
+            'keywords': ['서울', '부산', '대구', '인천', '대전', '광주', '울산', '세종', '경기', '강원', '충북', '충남', '전북', '전남', '경북', '경남', '제주'],
+            'extract_value': True
+        },
+        'salary': {
+            'keywords': ['만원', '원', '연봉', '월급', '급여', '보수', '임금', '면접', '협의'],
+            'extract_value': True,
+            'extract_number': True
+        },
+        'deadline': {
+            'keywords': ['년', '월', '일', '마감', '지원', '채용', '마감일'],
+            'extract_value': True
+        },
+        'contactEmail': {
+            'keywords': ['@', '이메일', 'email', '메일', 'mail'],
+            'extract_value': True
+        }
+    }
+    
+    # 질문 키워드 감지 (가장 먼저 체크)
+    question_keywords = [
+        "어떻게", "왜", "무엇", "뭐", "언제", "어디", "추천", "기준", "장점", "단점", "차이", 
+        "있을까", "있나요", "어떤", "무슨", "궁금", "알려줘", "설명해줘", "몇명", "몇 명", 
+        "얼마나", "어느 정도", "어떤 정도", "좋을까", "될까", "할까", "인가요", "일까",
+        "어때", "어떠", "어떻", "어떤가", "어떤지", "어떤지요", "어떤가요", "어떤지요",
+        "어떻게", "어떡", "어떻", "어떤", "어떤지", "어떤가", "어떤지요", "어떤가요"
+    ]
+    
+    # 질문 키워드가 포함되어 있거나 문장이 "?"로 끝나는 경우
+    if any(keyword in text_lower for keyword in question_keywords) or text.strip().endswith("?"):
+        matched_keywords = [kw for kw in question_keywords if kw in text_lower]
+        print(f"[DEBUG] 질문으로 분류됨 - 매칭된 질문 키워드: {matched_keywords}")
+        return {'type': 'question', 'category': 'general', 'confidence': 0.8}
+    
+    # 현재 필드에 대한 컨텍스트 검토
+    if current_field and current_field in field_categories:
+        field_config = field_categories[current_field]
+        print(f"[DEBUG] 필드 '{current_field}'의 키워드 검사 시작")
+        print(f"[DEBUG] 필드 키워드 목록: {field_config['keywords']}")
+        
+        # 해당 필드의 키워드가 포함되어 있는지 확인
+        matched_keywords = [kw for kw in field_config['keywords'] if kw in text_lower]
+        print(f"[DEBUG] 매칭된 답변 키워드: {matched_keywords}")
+        
+        if matched_keywords:
+            print(f"[DEBUG] 답변 키워드 감지됨 - 맥락 검토 시작")
+            # 맥락 검토: 실제 답변인지 확인
+            if is_valid_answer_for_field(text, current_field):
+                print(f"[DEBUG] 맥락 검토 통과 - 값 추출 시작")
+                extracted_value = extract_field_value(text, current_field, field_config)
+                print(f"[DEBUG] 추출된 값: {extracted_value}")
+                result = {
+                    'type': 'answer', 
+                    'category': current_field, 
+                    'value': extracted_value,
+                    'confidence': 0.9
+                }
+                print(f"[DEBUG] 답변으로 분류됨: {result}")
+                return result
+            else:
+                print(f"[DEBUG] 맥락 검토 실패 - 답변으로 분류하지 않음")
+        else:
+            print(f"[DEBUG] 답변 키워드 없음")
+    
+    # 기존 분류 로직 (필드별 컨텍스트가 없는 경우)
+    print(f"[DEBUG] 기존 분류 로직 사용")
+    result = classify_input(text)
+    print(f"[DEBUG] 최종 분류 결과: {result}")
+    return result
+
+def is_valid_answer_for_field(text: str, field: str) -> bool:
+    """
+    해당 필드에 대한 유효한 답변인지 검토
+    """
+    text_lower = text.lower()
+    
+    print(f"[DEBUG] ===== is_valid_answer_for_field 검토 시작 =====")
+    print(f"[DEBUG] 검토 텍스트: {text}")
+    print(f"[DEBUG] 검토 필드: {field}")
+    
+    # 부정적인 표현이나 질문성 표현이 포함된 경우 제외
+    negative_patterns = ['모르겠', '잘 모르', '몰라', '궁금', '어떻게', '왜', '뭐']
+    negative_matches = [pattern for pattern in negative_patterns if pattern in text_lower]
+    if negative_matches:
+        print(f"[DEBUG] 부정적 표현 감지됨: {negative_matches} - 유효하지 않음")
+        return False
+    
+    # 너무 짧거나 너무 긴 경우 제외
+    if len(text.strip()) < 2 or len(text.strip()) > 200:
+        print(f"[DEBUG] 길이 검사 실패 - 길이: {len(text.strip())} - 유효하지 않음")
+        return False
+    
+    # 필드별 유효성 검사
+    if field == 'headcount':
+        # 숫자가 포함되어야 함
+        import re
+        numbers = re.findall(r'\d+', text)
+        if not numbers:
+            print(f"[DEBUG] headcount 필드 - 숫자 없음 - 유효하지 않음")
+            return False
+        else:
+            print(f"[DEBUG] headcount 필드 - 숫자 감지됨: {numbers}")
+    
+    elif field == 'contactEmail':
+        # 이메일 형식이어야 함
+        import re
+        if not re.search(r'@', text):
+            print(f"[DEBUG] contactEmail 필드 - @ 없음 - 유효하지 않음")
+            return False
+        else:
+            print(f"[DEBUG] contactEmail 필드 - @ 감지됨")
+    
+    print(f"[DEBUG] 모든 검토 통과 - 유효함")
+    return True
+
+def extract_field_value(text: str, field: str, field_config: dict) -> str:
+    """
+    필드에 맞는 값 추출
+    """
+    import re
+    
+    print(f"[DEBUG] ===== extract_field_value 시작 =====")
+    print(f"[DEBUG] 원본 텍스트: {text}")
+    print(f"[DEBUG] 대상 필드: {field}")
+    print(f"[DEBUG] 필드 설정: {field_config}")
+    
+    if field == 'headcount' and field_config.get('extract_number'):
+        # 숫자만 추출
+        numbers = re.findall(r'\d+', text)
+        if numbers:
+            extracted = numbers[0] + '명'
+            print(f"[DEBUG] headcount - 숫자 추출: {numbers[0]} → {extracted}")
+            return extracted
+        print(f"[DEBUG] headcount - 숫자 없음, 원본 반환")
+        return text
+    
+    elif field == 'salary' and field_config.get('extract_number'):
+        # 숫자만 추출
+        numbers = re.findall(r'\d+', text)
+        if numbers:
+            extracted = numbers[0] + '만원'
+            print(f"[DEBUG] salary - 숫자 추출: {numbers[0]} → {extracted}")
+            return extracted
+        print(f"[DEBUG] salary - 숫자 없음, 원본 반환")
+        return text
+    
+    elif field == 'department':
+        # 부서명 추출
+        department_keywords = ['개발팀', '마케팅팀', '영업팀', '디자인팀', '기획팀', '인사팀']
+        for keyword in department_keywords:
+            if keyword in text:
+                print(f"[DEBUG] department - 부서명 추출: {keyword}")
+                return keyword
+        print(f"[DEBUG] department - 부서명 없음, 원본 반환")
+        return text
+    
+    else:
+        # 기본적으로 원본 텍스트 반환
+        print(f"[DEBUG] 기본 처리 - 원본 반환")
+        return text
+
+# 기존 detect_intent 함수는 호환성을 위해 유지
+def detect_intent(user_input: str):
+    classification = classify_input(user_input)
+    
+    if classification['type'] == 'field':
+        return "field", HARDCODED_FIELDS.get(classification['value'], f"{classification['value']}로 설정되었습니다.")
+    elif classification['type'] == 'question':
+        return "question", None
+    else:
+        return "answer", None
+
+# 프롬프트 템플릿
+PROMPT_TEMPLATE = """
+너는 채용 어시스턴트야. 사용자의 답변을 분석해 의도를 파악하고, 질문인지 요청인지 구분해서 필요한 응답을 진행해.
+
+- 사용자가 요청한 "지원 분야"는 아래와 같은 식으로 명확히 처리해줘:
+  - UI/UX 디자인
+  - 그래픽 디자인
+  - Figma 경험 등
+
+- 질문이면 AI답변을 생성하고, 답변이면 다음 항목을 물어봐.
+
+지금까지의 질문 흐름에 따라 대화의 자연스러운 흐름을 유지해.
+
+사용자 입력: {user_input}
+현재 필드: {current_field}
+"""
 
 # .env 파일 로드
 load_dotenv()
@@ -21,8 +411,8 @@ GEMINI_API_KEY = os.getenv('GOOGLE_API_KEY')
 if GEMINI_API_KEY:
     genai.configure(api_key=GEMINI_API_KEY)
     # Gemini 모델 초기화
-    # 'gemini-pro'는 텍스트 기반 모델입니다. 이미지 등을 처리하려면 다른 모델(예: 'gemini-pro-vision')을 사용할 수 있습니다.
-    model = genai.GenerativeModel('gemini-pro')
+    # 'gemini-1.5-pro'는 최신 텍스트 기반 모델입니다.
+    model = genai.GenerativeModel('gemini-1.5-pro')
 else:
     print("Warning: GOOGLE_API_KEY not found. Using fallback responses.")
     model = None
@@ -62,6 +452,8 @@ class ChatbotResponse(BaseModel):
     value: Optional[str] = None
     suggestions: Optional[List[str]] = []
     confidence: Optional[float] = None
+    items: Optional[List[Dict[str, Any]]] = None  # 선택 가능한 항목들
+    show_item_selection: Optional[bool] = False  # 항목 선택 UI 표시 여부
 
 class ConversationRequest(BaseModel):
     session_id: str
@@ -76,6 +468,8 @@ class ConversationResponse(BaseModel):
     suggestions: Optional[List[str]] = []
     field: Optional[str] = None
     value: Optional[str] = None
+    response_type: str = "conversation"  # "conversation" 또는 "selection"
+    selectable_items: Optional[List[Dict[str, str]]] = []  # 선택 가능한 항목들
 
 class GenerateQuestionsRequest(BaseModel):
     current_field: str
@@ -107,129 +501,203 @@ class RecommendationsRequest(BaseModel):
 
 @router.post("/start", response_model=SessionStartResponse)
 async def start_session(request: SessionStartRequest):
-    session_id = str(uuid.uuid4())
-    
-    if request.mode == "modal_assistant":
-        # 모달 어시스턴트 모드 (세션 유지)
-        if not request.fields:
-            raise HTTPException(status_code=400, detail="모달 어시스턴트 모드에서는 fields가 필요합니다")
-        
-        modal_sessions[session_id] = {
-            "page": request.page,
-            "fields": request.fields,
-            "current_field_index": 0,
-            "filled_fields": {},
-            "conversation_history": [],
-            "mode": "modal_assistant"
-        }
-        
-        first_field = request.fields[0]
-        return SessionStartResponse(
-            session_id=session_id,
-            question=f"안녕하세요! {request.page} 작성을 도와드리겠습니다. 🤖\n\n먼저 {first_field.get('label', '첫 번째 항목')}에 대해 알려주세요.",
-            current_field=first_field.get('key', 'unknown')
-        )
-    else:
-        # 기존 일반 모드 (여전히 세션 사용하나, /ask 엔드포인트는 이제 세션 없이 동작 가능)
-        questions = get_questions_for_page(request.page)
-        sessions[session_id] = {
-            "page": request.page,
-            "questions": questions,
-            "current_index": 0,
-            "current_field": questions[0]["field"] if questions else None,
-            "conversation_history": [],
-            "mode": "normal"
-        }
-        
-        return SessionStartResponse(
-            session_id=session_id,
-            question=questions[0]["question"] if questions else "질문이 없습니다.",
-            current_field=questions[0]["field"] if questions else None
-        )
+    print("[DEBUG] /start 요청:", request)
+    try:
+        session_id = str(uuid.uuid4())
+        if request.mode == "modal_assistant":
+            if not request.fields:
+                print("[ERROR] /start fields 누락")
+                raise HTTPException(status_code=400, detail="모달 어시스턴트 모드에서는 fields가 필요합니다")
+            modal_sessions[session_id] = {
+                "page": request.page,
+                "fields": request.fields,
+                "current_field_index": 0,
+                "filled_fields": {},
+                "conversation_history": [],
+                "mode": "modal_assistant"
+            }
+            first_field = request.fields[0]
+            response = SessionStartResponse(
+                session_id=session_id,
+                question=f"안녕하세요! {request.page} 작성을 도와드리겠습니다. 🤖\n\n먼저 {first_field.get('label', '첫 번째 항목')}에 대해 알려주세요.",
+                current_field=first_field.get('key', 'unknown')
+            )
+            print("[DEBUG] /start 응답:", response)
+            return response
+        else:
+            questions = get_questions_for_page(request.page)
+            sessions[session_id] = {
+                "page": request.page,
+                "questions": questions,
+                "current_index": 0,
+                "current_field": questions[0]["field"] if questions else None,
+                "conversation_history": [],
+                "mode": "normal"
+            }
+            response = SessionStartResponse(
+                session_id=session_id,
+                question=questions[0]["question"] if questions else "질문이 없습니다.",
+                current_field=questions[0]["field"] if questions else None
+            )
+            print("[DEBUG] /start 응답:", response)
+            return response
+    except Exception as e:
+        print("[ERROR] /start 예외:", e)
+        traceback.print_exc()
+        raise
 
 @router.post("/start-ai-assistant", response_model=SessionStartResponse)
 async def start_ai_assistant(request: SessionStartRequest):
-    """AI 도우미 모드 시작"""
-    session_id = str(uuid.uuid4())
-    
-    # AI 도우미용 필드 정의
-    ai_assistant_fields = [
-        {"key": "department", "label": "구인 부서", "type": "text"},
-        {"key": "headcount", "label": "채용 인원", "type": "text"},
-        {"key": "workType", "label": "업무 내용", "type": "text"},
-        {"key": "workHours", "label": "근무 시간", "type": "text"},
-        {"key": "location", "label": "근무 위치", "type": "text"},
-        {"key": "salary", "label": "급여 조건", "type": "text"},
-        {"key": "deadline", "label": "마감일", "type": "text"},
-        {"key": "email", "label": "연락처 이메일", "type": "email"}
-    ]
-    
-    modal_sessions[session_id] = {
-        "page": request.page,
-        "fields": ai_assistant_fields,
-        "current_field_index": 0,
-        "filled_fields": {},
-        "conversation_history": [],
-        "mode": "ai_assistant"
-    }
-    
-    first_field = ai_assistant_fields[0]
-    return SessionStartResponse(
-        session_id=session_id,
-        question=f"🤖 AI 채용공고 작성 도우미를 시작하겠습니다!\n\n먼저 {first_field.get('label', '첫 번째 항목')}에 대해 알려주세요.",
-        current_field=first_field.get('key', 'unknown')
-    )
+    print("[DEBUG] /start-ai-assistant 요청:", request)
+    try:
+        session_id = str(uuid.uuid4())
+        ai_assistant_fields = [
+            {"key": "department", "label": "구인 부서", "type": "text"},
+            {"key": "headcount", "label": "채용 인원", "type": "text"},
+            {"key": "mainDuties", "label": "업무 내용", "type": "text"},
+            {"key": "workHours", "label": "근무 시간", "type": "text"},
+            {"key": "locationCity", "label": "근무 위치", "type": "text"},
+            {"key": "salary", "label": "급여 조건", "type": "text"},
+            {"key": "deadline", "label": "마감일", "type": "text"},
+            {"key": "contactEmail", "label": "연락처 이메일", "type": "email"}
+        ]
+        modal_sessions[session_id] = {
+            "page": request.page,
+            "fields": ai_assistant_fields,
+            "current_field_index": 0,
+            "filled_fields": {},
+            "conversation_history": [],
+            "mode": "ai_assistant"
+        }
+        first_field = ai_assistant_fields[0]
+        response = SessionStartResponse(
+            session_id=session_id,
+            question=f" AI 도우미를 시작하겠습니다!\n\n먼저 {first_field.get('label', '첫 번째 항목')}에 대해 알려주세요.",
+            current_field=first_field.get('key', 'unknown')
+        )
+        print("[DEBUG] /start-ai-assistant 응답:", response)
+        return response
+    except Exception as e:
+        print("[ERROR] /start-ai-assistant 예외:", e)
+        traceback.print_exc()
+        raise
 
 @router.post("/ask", response_model=ChatbotResponse)
 async def ask_chatbot(request: ChatbotRequest):
-    # 일반 대화 모드 (session_id 없이 conversation_history로 컨텍스트 유지)
-    if request.mode == "normal" or not request.session_id: # session_id가 없으면 normal 모드로 간주
-        return await handle_normal_request(request)
-    # 모달 어시스턴트 모드 (session_id를 통해 세션 상태 유지)
-    elif request.mode == "modal_assistant":
-        return await handle_modal_assistant_request(request)
-    else:
-        # 기타 모드 처리 (예: "ai_assistant"는 ai_assistant_chat으로 라우팅됨)
-        raise HTTPException(status_code=400, detail="알 수 없는 챗봇 모드입니다.")
-
-@router.post("/conversation", response_model=ConversationResponse)
-async def handle_conversation(request: ConversationRequest):
-    """대화형 질문-답변 처리"""
+    print("[DEBUG] /ask 요청:", request)
     try:
-        # 대화형 응답 생성 (이 함수도 필요하다면 Gemini API 연동 고려)
-        response = await generate_conversational_response(
-            request.user_input, 
-            request.current_field, 
-            request.filled_fields
+        if request.mode == "normal" or not request.session_id:
+            response = await handle_normal_request(request)
+        elif request.mode == "modal_assistant":
+            response = await handle_modal_assistant_request(request)
+        else:
+            print("[ERROR] /ask 알 수 없는 모드:", request.mode)
+            raise HTTPException(status_code=400, detail="알 수 없는 챗봇 모드입니다.")
+        print("[DEBUG] /ask 응답:", response)
+        return response
+    except Exception as e:
+        print("[ERROR] /ask 예외:", e)
+        traceback.print_exc()
+        raise
+
+@router.post("/conversation")
+async def conversation(request: ConversationRequest):
+    try:
+        print(f"[DEBUG] /conversation 요청: {request}")
+        
+        # LLM 서비스 인스턴스 생성
+        llm_service = LLMService()
+        
+        # AI 응답 생성
+        response = await llm_service.process_user_input(
+            page=request.page,
+            field=request.current_field,
+            user_input=request.user_input,
+            conversation_history=request.conversation_history,
+            questions=request.questions,
+            current_index=request.current_index
         )
         
-        return ConversationResponse(
-            message=response["message"],
+        # 응답 타입 분석 및 결정
+        response_type = "conversation"  # 기본값
+        selectable_items = []
+        
+        # 선택형 응답인지 판단하는 로직
+        if response.get("value") is None and response.get("message"):
+            message_content = response.get("message", "")
+            
+            # 선택형 응답 패턴 감지
+            selection_patterns = [
+                "이 중에서 선택해 주세요",
+                "다음 중에서 선택",
+                "선택해 주세요",
+                "원하는 것을 선택",
+                "번호로 선택",
+                "1.", "2.", "3.", "4.", "5."  # 번호로 구분된 목록
+            ]
+            
+            # 선택형 응답인지 확인
+            is_selection_response = any(pattern in message_content for pattern in selection_patterns)
+            
+            if is_selection_response:
+                response_type = "selection"
+                
+                # 메시지에서 선택 항목 추출
+                lines = message_content.split('\n')
+                for line in lines:
+                    line = line.strip()
+                    if line and (line.startswith(('1.', '2.', '3.', '4.', '5.', '6.', '7.', '8.', '9.')) or 
+                               line.startswith(('•', '-', '*'))):
+                        # 번호나 불릿 제거
+                        import re
+                        clean_text = re.sub(r'^\d+\.\s*', '', line)
+                        clean_text = re.sub(r'^[•\-*]\s*', '', clean_text)
+                        clean_text = clean_text.strip()
+                        if clean_text:
+                            selectable_items.append({
+                                "text": clean_text,
+                                "value": clean_text
+                            })
+        
+        result = ConversationResponse(
+            message=response.get("message", ""),
             is_conversation=response.get("is_conversation", True),
             suggestions=response.get("suggestions", []),
             field=response.get("field"),
-            value=response.get("value")
+            value=response.get("value"),
+            response_type=response_type,
+            selectable_items=selectable_items
         )
+        print("[DEBUG] /conversation 응답:", result)
+        return result
+        
     except Exception as e:
-        raise HTTPException(status_code=500, detail=f"대화 처리 오류: {str(e)}")
+        print(f"[ERROR] /conversation 오류: {str(e)}")
+        raise HTTPException(status_code=500, detail=str(e))
 
 @router.post("/generate-questions", response_model=Dict[str, Any])
 async def generate_contextual_questions(request: GenerateQuestionsRequest):
     """컨텍스트 기반 질문 생성"""
+    print("[DEBUG] /generate-questions 요청:", request)
     try:
         questions = await generate_field_questions(
             request.current_field, 
             request.filled_fields
         )
-        
-        return {"questions": questions}
+        result = {"questions": questions}
+        print("[DEBUG] /generate-questions 응답:", result)
+        return result
     except Exception as e:
-        raise HTTPException(status_code=500, detail=f"질문 생성 오류: {str(e)}")
+        print("[ERROR] /generate-questions 예외:", e)
+        traceback.print_exc()
+        raise
 
 @router.post("/ai-assistant-chat", response_model=ChatbotResponse)
 async def ai_assistant_chat(request: ChatbotRequest):
     """AI 도우미 채팅 처리 (session_id 필요)"""
+    print("[DEBUG] /ai-assistant-chat 요청:", request)
     if not request.session_id or request.session_id not in modal_sessions:
+        print("[ERROR] /ai-assistant-chat 유효하지 않은 세션:", request.session_id)
         raise HTTPException(status_code=400, detail="유효하지 않은 세션입니다")
     
     session = modal_sessions[request.session_id]
@@ -237,9 +705,11 @@ async def ai_assistant_chat(request: ChatbotRequest):
     fields = session["fields"]
     
     if current_field_index >= len(fields):
-        return ChatbotResponse(
+        response = ChatbotResponse(
             message="🎉 모든 정보를 입력받았습니다! 채용공고 등록이 완료되었습니다."
         )
+        print("[DEBUG] /ai-assistant-chat 응답:", response)
+        return response
     
     current_field = fields[current_field_index]
     
@@ -274,17 +744,28 @@ async def ai_assistant_chat(request: ChatbotRequest):
         else:
             ai_response["message"] += "\n\n🎉 모든 정보 입력이 완료되었습니다!"
     
-    return ChatbotResponse(
+    response = ChatbotResponse(
         message=ai_response["message"],
         field=current_field["key"],
         value=ai_response.get("value"),
         suggestions=ai_response.get("suggestions", []),
-        confidence=ai_response.get("confidence", 0.8)
+        confidence=ai_response.get("confidence", 0.8),
+        items=ai_response.get("items"),
+        show_item_selection=ai_response.get("show_item_selection")
     )
+    print("[DEBUG] /ai-assistant-chat 응답:", response)
+    return response
 
 async def handle_modal_assistant_request(request: ChatbotRequest):
     """모달 어시스턴트 모드 처리 (session_id 필요)"""
+    print("[DEBUG] ===== handle_modal_assistant_request 시작 =====")
+    print("[DEBUG] 요청 데이터:", request)
+    print("[DEBUG] user_input:", request.user_input)
+    print("[DEBUG] current_field:", request.current_field)
+    print("[DEBUG] mode:", request.mode)
+    print("[DEBUG] session_id:", request.session_id)
     if not request.session_id or request.session_id not in modal_sessions:
+        print("[ERROR] /ai-assistant-chat 유효하지 않은 세션:", request.session_id)
         raise HTTPException(status_code=400, detail="유효하지 않은 세션입니다")
     
     session = modal_sessions[request.session_id]
@@ -292,9 +773,11 @@ async def handle_modal_assistant_request(request: ChatbotRequest):
     fields = session["fields"]
     
     if current_field_index >= len(fields):
-        return ChatbotResponse(
+        response = ChatbotResponse(
             message="모든 정보를 입력받았습니다! 완료 버튼을 눌러주세요. 🎉"
         )
+        print("[DEBUG] /ai-assistant-chat 응답:", response)
+        return response
     
     current_field = fields[current_field_index]
     
@@ -318,9 +801,14 @@ async def handle_modal_assistant_request(request: ChatbotRequest):
     
     response_message = llm_response["message"]
     
-    # LLM이 필드 값을 추출했다고 판단한 경우 (is_conversation이 false일 때)
-    if not llm_response.get("is_conversation", True) and llm_response.get("value"):
-        session["filled_fields"][current_field["key"]] = llm_response["value"]
+    # LLM이 필드 값을 추출했다고 판단한 경우 (value가 있는 경우)
+    if llm_response.get("value"):
+        # 필드 키를 명시적으로 설정
+        field_key = llm_response.get("field", current_field["key"])
+        field_value = llm_response["value"]
+        
+        print(f"[DEBUG] 필드 업데이트 - 키: {field_key}, 값: {field_value}")
+        session["filled_fields"][field_key] = field_value
         
         # 다음 필드로 이동
         session["current_field_index"] += 1
@@ -333,88 +821,132 @@ async def handle_modal_assistant_request(request: ChatbotRequest):
         else:
             response_message += "\n\n🎉 모든 정보 입력이 완료되었습니다!"
     
-    return ChatbotResponse(
+    response = ChatbotResponse(
         message=response_message,
         field=current_field["key"] if not llm_response.get("is_conversation", True) else None, # 대화형 응답 시 필드 값은 비워둘 수 있음
         value=llm_response.get("value"),
         suggestions=llm_response.get("suggestions", []), # LLM이 제안을 생성할 수 있다면 활용
-        confidence=llm_response.get("confidence", 0.8) # LLM이 confidence를 반환할 수 있다면 활용
+        confidence=llm_response.get("confidence", 0.8), # LLM이 confidence를 반환할 수 있다면 활용
+        items=llm_response.get("items"),
+        show_item_selection=llm_response.get("show_item_selection")
     )
+    print("[DEBUG] ===== handle_modal_assistant_request 응답 =====")
+    print("[DEBUG] 응답 메시지:", response.message)
+    print("[DEBUG] 응답 필드:", response.field)
+    print("[DEBUG] 응답 값:", response.value)
+    print("[DEBUG] 응답 제안:", response.suggestions)
+    print("[DEBUG] 응답 신뢰도:", response.confidence)
+    print("[DEBUG] ===== handle_modal_assistant_request 완료 =====")
+    return response
 
 async def handle_normal_request(request: ChatbotRequest):
     """
-    일반 챗봇 요청 처리 (세션 ID 없이 conversation_history로 컨텍스트 유지)
-    이 부분이 실제 Gemini API와 연동됩니다.
+    일반 챗봇 요청 처리 (키워드 기반 1차 분류 → LLM 호출 → 응답)
     """
+    print("[DEBUG] handle_normal_request 요청:", request)
     user_input = request.user_input
-    # 프론트엔드에서 넘어온 대화 기록 (type: 'user'/'bot')
     conversation_history_from_frontend = request.conversation_history
 
     if not user_input:
         raise HTTPException(status_code=400, detail="사용자 입력이 필요합니다.")
 
     try:
-        # Gemini API에 전달할 대화 기록 구성
-        # 프론트엔드에서 넘어온 history 형식을 Gemini API의 'role'과 'parts' 형식으로 변환
-        gemini_history = []
-        for msg in conversation_history_from_frontend:
-            role = 'user' if msg.get('type') == 'user' else 'model' # 'bot'을 'model'로 변환
-            gemini_history.append({"role": role, "parts": [{"text": msg.get('content', '')}]})
+        # 1) 키워드 기반 1차 분류
+        classification = classify_input(user_input)
+        print(f"[DEBUG] 분류 결과: {classification}")
         
-        # 현재 사용자 입력 추가
-        full_history_for_gemini = gemini_history + [{'role': 'user', 'parts': [{'text': user_input}]}]
-
-        # Gemini 모델 호출
-        # 안전 설정을 기본으로 적용합니다. 필요에 따라 변경 가능합니다.
-        # https://ai.google.dev/docs/safety_setting_gemini
-        gemini_response_obj = await model.generate_content_async( # 비동기 호출로 변경
-            full_history_for_gemini,
-            safety_settings={
-                "HARASSMENT": "BLOCK_NONE",
-                "HATE_SPEECH": "BLOCK_NONE",
-                "SEXUALLY_EXPLICIT": "BLOCK_NONE",
-                "DANGEROUS_CONTENT": "BLOCK_NONE",
-            }
-        )
-        
-        # 텍스트 응답 추출
-        gemini_response_text = gemini_response_obj.text
-
-        # 클라이언트에 응답 반환
-        return ChatbotResponse(
-            message=gemini_response_text,
-            field=None,  # 일반 대화에서는 특정 필드 지정하지 않음
-            value=None,  # 일반 대화에서는 특정 값 추출하지 않음
-            suggestions=[], # 필요하다면 Gemini 응답에서 제안을 추출하여 제공
-            confidence=1.0 # Gemini 응답이므로 높은 신뢰도
-        )
+        # 2) 분류된 결과에 따른 처리
+        if classification['type'] == 'field':
+            # 필드 값으로 처리
+            field_value = classification.get('value', user_input.strip())
+            response = ChatbotResponse(
+                message=f"{classification['category']}: {field_value}로 설정되었습니다.",
+                field=None,
+                value=field_value,
+                suggestions=[],
+                confidence=classification['confidence']
+            )
+            print("[DEBUG] handle_normal_request 응답 (필드):", response)
+            return response
+            
+        elif classification['type'] == 'question':
+            # 3) Gemini API 호출로 답변 생성
+            ai_response = await call_gemini_api(user_input, conversation_history_from_frontend)
+            response = ChatbotResponse(
+                message=ai_response,
+                field=None,
+                value=None,
+                suggestions=[],
+                confidence=classification['confidence']
+            )
+            print("[DEBUG] handle_normal_request 응답 (질문):", response)
+            return response
+            
+        elif classification['type'] == 'chat':
+            # 일상 대화 처리
+            response = ChatbotResponse(
+                message="안녕하세요! 채용 관련 문의사항이 있으시면 언제든 말씀해 주세요.",
+                field=None,
+                value=None,
+                suggestions=[],
+                confidence=classification['confidence']
+            )
+            print("[DEBUG] handle_normal_request 응답 (일상대화):", response)
+            return response
+            
+        else:
+            # 답변인 경우 기본 처리 (자동 완성)
+            # 다음 질문을 생성하거나 대화를 계속 이어가도록 처리
+            next_questions = await generate_field_questions("general", {})
+            next_question = next_questions[0] if next_questions else "다른 도움이 필요하시면 언제든 말씀해 주세요."
+            
+            # 필드별 추천 제안 가져오기
+            field_suggestions = get_field_suggestions("general", {})
+            
+            response = ChatbotResponse(
+                message=f"'{user_input}'로 입력하겠습니다.\n\n{next_question}",
+                field=None,
+                value=user_input.strip(),
+                suggestions=field_suggestions,
+                confidence=classification['confidence']
+            )
+            print("[DEBUG] handle_normal_request 응답 (답변):", response)
+            return response
 
     except Exception as e:
-        print(f"Error calling Gemini API: {e}")
-        # 오류 발생 시 사용자에게 친화적인 메시지 반환
-        return ChatbotResponse(
-            message=f"죄송합니다. AI 응답을 가져오는 데 실패했습니다. 다시 시도해 주세요. (오류: {str(e)})",
+        print(f"[ERROR] handle_normal_request 예외: {e}")
+        traceback.print_exc()
+        response = ChatbotResponse(
+            message=f"죄송합니다. 처리 중 오류가 발생했습니다. 다시 시도해 주세요. (오류: {str(e)})",
             field=None,
             value=None
         )
+        print("[DEBUG] handle_normal_request 응답 (오류):", response)
+        return response
 
 # 이 아래 함수들은 현재 시뮬레이션된 응답 로직을 사용합니다.
 # 만약 이 함수들도 실제 Gemini API와 연동하고 싶으시다면,
 # 해당 함수 내부에 Gemini API 호출 로직을 추가해야 합니다.
 async def generate_conversational_response(user_input: str, current_field: str, filled_fields: Dict[str, Any]) -> Dict[str, Any]:
     """대화형 응답 생성"""
+    print("[DEBUG] generate_conversational_response 요청:", user_input, current_field, filled_fields)
     await asyncio.sleep(0.5)
     
     question_keywords = ["어떤", "무엇", "어떻게", "왜", "언제", "어디서", "얼마나", "몇", "무슨"]
     is_question = any(keyword in user_input for keyword in question_keywords) or user_input.endswith("?")
     
     if is_question:
-        return await handle_question_response(user_input, current_field, filled_fields)
+        response = await handle_question_response(user_input, current_field, filled_fields)
+        print("[DEBUG] generate_conversational_response 응답 (질문):", response)
+        return response
     else:
-        return await handle_answer_response(user_input, current_field, filled_fields)
+        response = await handle_answer_response(user_input, current_field, filled_fields)
+        print("[DEBUG] generate_conversational_response 응답 (답변):", response)
+        return response
 
 async def handle_question_response(user_input: str, current_field: str, filled_fields: Dict[str, Any]) -> Dict[str, Any]:
     """질문에 대한 응답 처리"""
+    print("[DEBUG] handle_question_response 요청:", user_input, current_field, filled_fields)
     question_responses = {
         "department": {
             "개발팀": "개발팀은 주로 웹/앱 개발, 시스템 구축, 기술 지원 등을 담당합니다. 프론트엔드, 백엔드, 풀스택 개발자로 구성되어 있으며, 최신 기술 트렌드를 반영한 개발을 진행합니다.",
@@ -434,29 +966,37 @@ async def handle_question_response(user_input: str, current_field: str, filled_f
     
     for keyword, response in field_responses.items():
         if keyword in user_input:
-            return {
+            response_data = {
                 "message": response,
                 "is_conversation": True,
                 "suggestions": list(field_responses.keys())
             }
+            print("[DEBUG] handle_question_response 응답:", response_data)
+            return response_data
     
-    return {
+    response_data = {
         "message": f"{current_field}에 대한 질문이군요. 더 구체적으로 어떤 부분이 궁금하신지 말씀해 주세요.",
         "is_conversation": True,
         "suggestions": list(field_responses.keys())
     }
+    print("[DEBUG] handle_question_response 응답:", response_data)
+    return response_data
 
 async def handle_answer_response(user_input: str, current_field: str, filled_fields: Dict[str, Any]) -> Dict[str, Any]:
     """답변 처리"""
-    return {
+    print("[DEBUG] handle_answer_response 요청:", user_input, current_field, filled_fields)
+    response_data = {
         "message": f"'{user_input}'로 입력하겠습니다. 다음 질문으로 넘어가겠습니다.",
         "field": current_field,
         "value": user_input,
         "is_conversation": False
     }
+    print("[DEBUG] handle_answer_response 응답:", response_data)
+    return response_data
 
 async def generate_field_questions(current_field: str, filled_fields: Dict[str, Any]) -> List[str]:
     """필드별 질문 생성"""
+    print("[DEBUG] generate_field_questions 요청:", current_field, filled_fields)
     questions_map = {
         "department": [
             "개발팀은 어떤 업무를 하나요?",
@@ -496,14 +1036,17 @@ async def generate_field_questions(current_field: str, filled_fields: Dict[str, 
         ]
     }
     
-    return questions_map.get(current_field, [
+    questions = questions_map.get(current_field, [
         "이 항목에 대해 궁금한 점이 있으신가요?",
         "더 자세한 설명이 필요하신가요?",
         "예시를 들어 설명해드릴까요?"
     ])
+    print("[DEBUG] generate_field_questions 응답:", questions)
+    return questions
 
 async def generate_modal_ai_response(user_input: str, field: Dict[str, Any], session: Dict[str, Any]) -> Dict[str, Any]:
     """모달 어시스턴트용 AI 응답 생성 (시뮬레이션)"""
+    print("[DEBUG] generate_modal_ai_response 요청:", user_input, field, session)
     field_key = field.get("key", "")
     field_label = field.get("label", "")
     
@@ -558,86 +1101,167 @@ async def generate_modal_ai_response(user_input: str, field: Dict[str, Any], ses
         }
     }
     
-    return responses.get(field_key, {
+    response_data = responses.get(field_key, {
         "message": f"{field_label} 정보를 확인했습니다. 다음 질문으로 넘어가겠습니다.",
         "value": user_input,
         "suggestions": [],
         "confidence": 0.5
     })
+    print("[DEBUG] generate_modal_ai_response 응답:", response_data)
+    return response_data
 
 async def generate_ai_assistant_response(user_input: str, field: Dict[str, Any], session: Dict[str, Any]) -> Dict[str, Any]:
-    """AI 도우미용 응답 생성 (시뮬레이션)"""
+    """AI 도우미용 응답 생성 (개선된 Gemini API 사용)"""
+    print("[DEBUG] ===== AI 어시스턴트 응답 생성 시작 =====")
+    print("[DEBUG] 사용자 입력:", user_input)
+    print("[DEBUG] 현재 필드:", field)
+    print("[DEBUG] 세션 정보:", session)
+    
     field_key = field.get("key", "")
     field_label = field.get("label", "")
+    print(f"[DEBUG] 필드 키: {field_key}, 필드 라벨: {field_label}")
     
-    responses = {
-        "department": {
-            "message": f"'{user_input}' 부서로 입력하겠습니다. 몇 명을 채용하실 예정인가요?",
-            "value": user_input,
-            "suggestions": ["1명", "2명", "3명", "5명", "10명"],
-            "confidence": 0.9
-        },
-        "headcount": {
-            "message": f"채용 인원 {user_input}명으로 입력하겠습니다. 어떤 업무를 담당하게 될까요?",
-            "value": user_input,
-            "suggestions": ["개발", "디자인", "마케팅", "영업", "기획"],
-            "confidence": 0.8
-        },
-        "workType": {
-            "message": f"업무 내용 '{user_input}'으로 입력하겠습니다. 근무 시간은 어떻게 되나요?",
-            "value": user_input,
-            "suggestions": ["09:00-18:00", "10:00-19:00", "유연근무제"],
-            "confidence": 0.7
-        },
-        "workHours": {
-            "message": f"근무 시간 '{user_input}'으로 입력하겠습니다. 근무 위치는 어디인가요?",
-            "value": user_input,
-            "suggestions": ["서울", "부산", "대구", "인천", "대전"],
-            "confidence": 0.8
-        },
-        "location": {
-            "message": f"근무 위치 '{user_input}'으로 입력하겠습니다. 급여 조건은 어떻게 되나요?",
-            "value": user_input,
-            "suggestions": ["면접 후 협의", "3000만원", "4000만원", "5000만원"],
-            "confidence": 0.6
-        },
-        "salary": {
-            "message": f"급여 조건 '{user_input}'으로 입력하겠습니다. 마감일은 언제인가요?",
-            "value": user_input,
-            "suggestions": ["2024년 12월 31일", "2024년 11월 30일", "채용 시 마감"],
-            "confidence": 0.7
-        },
-        "deadline": {
-            "message": f"마감일 '{user_input}'으로 입력하겠습니다. 연락처 이메일을 알려주세요.",
-            "value": user_input,
-            "suggestions": ["hr@company.com", "recruit@company.com"],
-            "confidence": 0.8
-        },
-        "email": {
-            "message": f"연락처 이메일 '{user_input}'으로 입력하겠습니다. 모든 정보 입력이 완료되었습니다!",
-            "value": user_input,
+    # 1) 키워드 기반 1차 분류
+    classification = classify_input(user_input)
+    print(f"[DEBUG] 분류 결과: {classification}")
+    print(f"[DEBUG] 분류 타입: {classification.get('type')}")
+    print(f"[DEBUG] 분류 카테고리: {classification.get('category')}")
+    print(f"[DEBUG] 분류 값: {classification.get('value')}")
+    print(f"[DEBUG] 신뢰도: {classification.get('confidence')}")
+    
+    # 2) 분류된 결과에 따른 처리
+    if classification['type'] == 'question':
+        # 질문인 경우 Gemini API 호출
+        try:
+            ai_assistant_context = f"""
+현재 채용 공고 작성 중입니다. 현재 필드: {field_label} ({field_key})
+
+사용자 질문: {user_input}
+
+이 질문에 대해 채용 공고 작성에 도움이 되는 실무적인 답변을 제공해주세요.
+"""
+            ai_response = await call_gemini_api(ai_assistant_context)
+            
+            # 응답을 항목별로 분할
+            items = parse_response_items(ai_response)
+            
+            response = {
+                "message": ai_response,
+                "value": None,  # 질문이므로 value는 None
+                "field": current_field,
+                "suggestions": [],
+                "confidence": classification['confidence'],
+                "items": items,
+                "show_item_selection": True  # 항목 선택 UI 표시
+            }
+            print(f"[DEBUG] 질문 응답 (항목 선택 포함): {response}")
+            return response
+            
+        except Exception as e:
+            print(f"[ERROR] Gemini API 호출 실패: {e}")
+            # 오프라인 응답으로 대체
+            response = {
+                "message": f"'{user_input}'에 대한 답변을 제공해드리겠습니다. 현재 필드 '{field_label}'에 대한 정보를 입력해주세요.",
+                "value": None,
+                "field": current_field,
+                "suggestions": [],
+                "confidence": 0.5
+            }
+            return response
+    elif classification['type'] == 'chat':
+        # 일상 대화 처리
+        return {
+            "message": "안녕하세요! 채용 공고 작성에 도와드리고 있습니다. 현재 {field_label}에 대한 정보를 입력해주세요.",
+            "value": None,
+            "field": current_field,
             "suggestions": [],
-            "confidence": 0.9
+            "confidence": classification['confidence']
         }
-    }
-    
-    return responses.get(field_key, {
-        "message": f"{field_label} 정보를 확인했습니다. 다음 질문으로 넘어가겠습니다.",
-        "value": user_input,
-        "suggestions": [],
-        "confidence": 0.5
-    })
+        print(f"[DEBUG] 일상 대화 응답: {response}")
+        return response
+    else:
+        # 답변인 경우 (개선된 처리)
+        field_value = classification.get('value', user_input)
+        print(f"[DEBUG] 답변 처리 결과 - 필드: {field_key}, 값: {field_value}")
+        
+        # 필드 업데이트 후 다음 질문 자동 생성
+        next_question = ""
+        next_suggestions = []
+        
+        # 필드별 다음 질문 매핑
+        field_questions = {
+            "department": {
+                "question": "몇 명을 채용하실 예정인가요?",
+                "suggestions": ["1명", "2명", "3명", "5명", "10명"]
+            },
+            "headcount": {
+                "question": "어떤 업무를 담당하게 될까요?",
+                "suggestions": ["개발", "디자인", "마케팅", "영업", "기획", "고객지원"]
+            },
+            "mainDuties": {
+                "question": "근무 시간은 어떻게 되나요?",
+                "suggestions": ["09:00-18:00", "10:00-19:00", "유연근무제", "시차출근제"]
+            },
+            "workHours": {
+                "question": "근무 요일은 어떻게 되나요?",
+                "suggestions": ["월-금", "월-토", "주5일", "주6일"]
+            },
+            "workDays": {
+                "question": "근무 위치는 어디인가요?",
+                "suggestions": ["서울", "부산", "대구", "인천", "대전", "광주", "울산"]
+            },
+            "locationCity": {
+                "question": "구체적인 지역을 알려주세요.",
+                "suggestions": ["강남구", "서초구", "마포구", "종로구", "중구"]
+            },
+            "locationDistrict": {
+                "question": "급여 조건은 어떻게 되나요?",
+                "suggestions": ["면접 후 협의", "3000만원", "4000만원", "5000만원", "6000만원"]
+            },
+            "salary": {
+                "question": "마감일은 언제인가요?",
+                "suggestions": ["2024년 12월 31일", "2024년 11월 30일", "채용 시 마감", "상시채용"]
+            },
+            "deadline": {
+                "question": "연락처 이메일을 알려주세요.",
+                "suggestions": ["hr@company.com", "recruit@company.com", "인사팀 이메일"]
+            }
+        }
+        
+        # 현재 필드에 대한 다음 질문이 있는지 확인
+        if field_key in field_questions:
+            next_question = field_questions[field_key]["question"]
+            next_suggestions = field_questions[field_key]["suggestions"]
+        
+        # 응답 메시지에 다음 질문 포함
+        if next_question:
+            response_message = f"'{field_label}'에 대해 '{field_value}'로 입력하겠습니다. {next_question}"
+        else:
+            response_message = f"'{field_label}'에 대해 '{field_value}'로 입력하겠습니다."
+        
+        response = {
+            "message": response_message,
+            "value": field_value,
+            "field": field_key,
+            "suggestions": next_suggestions,
+            "confidence": classification['confidence'],
+            "next_question": next_question
+        }
+        print(f"[DEBUG] ===== AI 어시스턴트 응답 생성 완료 =====")
+        print(f"[DEBUG] 최종 결과: {response}")
+        print("[DEBUG] ===== AI 어시스턴트 응답 생성 완료 =====")
+        return response
 
 async def simulate_llm_response(user_input: str, current_field: str, session: Dict[str, Any]) -> Dict[str, Any]:
     """
-    LLM 응답을 시뮬레이션하여 사람과 대화하는 것처럼 자연스러운 반응을 생성합니다.
-    인사 담당자님의 채용공고 등록을 돕는 AI 어시스턴트 역할을 수행합니다.
+    키워드 기반 1차 분류 → LLM 호출 → 응답 처리 (개선된 버전)
     """
+    print("[DEBUG] ===== simulate_llm_response 시작 =====")
+    print("[DEBUG] user_input:", user_input)
+    print("[DEBUG] current_field:", current_field)
+    print("[DEBUG] session mode:", session.get("mode"))
+    
     await asyncio.sleep(0.5) # 실제 LLM API 호출 시뮬레이션
-
-    # 세션에서 대화 히스토리와 현재까지 채워진 필드 정보 가져오기
-    # conversation_history = session.get("conversation_history", []) # 현재 함수에서 사용하지 않음
-    # filled_fields = session.get("filled_fields", {}) # 현재 함수에서 사용하지 않음
 
     # 현재 처리 중인 필드의 사용자 친화적인 레이블 가져오기
     current_field_label = ""
@@ -654,182 +1278,281 @@ async def simulate_llm_response(user_input: str, current_field: str, session: Di
                 current_field_label = q.get("question", current_field).replace("을/를 알려주세요.", "").replace("은/는 몇 명인가요?", "").strip()
                 break
     
-    # --- 1단계: 사용자 발화 의도 파악 ---
-    # 사용자가 챗봇에게 질문을 던졌는지 판단
-    question_phrases = ["어떤", "무엇", "어떻게", "왜", "언제", "어디서", "얼마나", "몇", "무슨", "궁금", "알려줘", "설명해줘", "뭐가 좋을까요", "어떤게 있나요", "어떻게 작성해야 할까요", "이름이 뭐야", "너는 누구니"]
-    is_user_asking_question = any(phrase in user_input.lower() for phrase in question_phrases) or user_input.strip().endswith("?")
+    # 컨텍스트를 고려한 분류 (개선된 버전)
+    classification = classify_input_with_priority(user_input, current_field)
+    print(f"[DEBUG] 분류 결과: {classification}")
+    print(f"[DEBUG] 분류 타입: {classification.get('type')}")
+    print(f"[DEBUG] 분류 카테고리: {classification.get('category')}")
+    print(f"[DEBUG] 분류 값: {classification.get('value')}")
+    print(f"[DEBUG] 신뢰도: {classification.get('confidence')}")
+    
+    # 2) 분류된 결과에 따른 처리
+    if classification['type'] == 'question':
+        # 질문인 경우 Gemini API 호출
+        try:
+            ai_assistant_context = f"""
+현재 채용 공고 작성 중입니다. 현재 필드: {current_field_label} ({current_field})
 
-    # 사용자가 불확실하거나 도움을 요청하는지 판단
-    uncertainty_phrases = ["음...", "글쎄요", "잘 모르겠어요", "고민 중", "생각 중", "어렵네요", "추천해줘", "도와줘", "예시", "보통 이럴때 무슨 말들을 쓸까"]
-    is_user_uncertain_or_seeking_help = any(phrase in user_input.lower() for phrase in uncertainty_phrases)
+사용자 질문: {user_input}
 
-    # --- 2단계: 의도에 따른 응답 생성 ---
-
-    # 2-1. 사용자가 챗봇 자체에 대해 질문한 경우
-    if any(kw in user_input.lower() for kw in ["이름이 뭐야", "너는 누구니", "봇", "ai"]):
-        return {
-            "message": f"안녕하세요! 저는 인사 담당자님의 채용공고 작성을 도와드리는 AI 어시스턴트입니다. 지금 {current_field_label} 정보를 입력받고 있어요. 혹시 이 부분에 대해 궁금한 점이 있으신가요, 아니면 어떤 내용을 입력할지 알려주실 수 있을까요?",
-            "is_conversation": True # 대화형 응답
+이 질문에 대해 채용 공고 작성에 도움이 되는 실무적인 답변을 제공해주세요.
+"""
+            ai_response = await call_gemini_api(ai_assistant_context)
+            
+            # 응답을 항목별로 분할
+            items = parse_response_items(ai_response)
+            
+            response = {
+                "message": ai_response,
+                "value": None,  # 질문이므로 value는 None
+                "field": current_field,
+                "suggestions": [],
+                "confidence": classification['confidence'],
+                "items": items,
+                "show_item_selection": True  # 항목 선택 UI 표시
+            }
+            print(f"[DEBUG] 질문 응답 (항목 선택 포함): {response}")
+            return response
+            
+        except Exception as e:
+            print(f"[ERROR] Gemini API 호출 실패: {e}")
+            # 오프라인 응답으로 대체
+            response = {
+                "message": f"'{user_input}'에 대한 답변을 제공해드리겠습니다. 현재 필드 '{current_field_label}'에 대한 정보를 입력해주세요.",
+                "value": None,
+                "field": current_field,
+                "suggestions": [],
+                "confidence": 0.5
+            }
+            return response
+    elif classification['type'] == 'chat':
+        # 일상 대화 처리
+        response = {
+            "message": f"안녕하세요! 채용 공고 작성을 도와드리고 있습니다. 현재 {current_field_label}에 대한 정보를 입력해주세요.",
+            "value": None,
+            "field": current_field,
+            "suggestions": [],
+            "confidence": classification['confidence']
         }
-
-    # 2-2. 사용자가 현재 필드에 대해 질문하거나 도움을 요청한 경우 (매우 중요)
-    if is_user_asking_question or is_user_uncertain_or_seeking_help:
-        # 필드별 질문 답변 및 도움말 제공
-        response_map_for_questions = {
+        print(f"[DEBUG] 일상 대화 응답: {response}")
+        return response
+    else:
+        # 답변인 경우 (개선된 처리)
+        field_value = classification.get('value', user_input)
+        print(f"[DEBUG] 답변 처리 결과 - 필드: {current_field}, 값: {field_value}")
+        
+        # 필드별 다음 질문 매핑
+        field_questions = {
             "department": {
-                "general_q": "구인 부서는 채용할 인력이 소속될 부서를 의미합니다. 예를 들어 '개발팀', '마케팅팀', '영업팀' 등이 될 수 있어요. 어떤 부서에서 인력이 필요하신가요?",
-                "what_to_write": "부서명은 일반적으로 '개발팀', '기획팀', '영업팀'처럼 명확하게 작성하시면 됩니다. 특정 팀이 없다면 '경영지원팀'이나 '사업부' 등으로 기재할 수도 있고요. 어떤 부서를 채용하고 싶으신가요?",
-                "example": "예시로는 '프론트엔드 개발팀', '글로벌 마케팅팀', 'B2B 영업팀' 등이 있습니다. 어떤 부서를 찾고 계신가요?",
+                "question": "몇 명을 채용하실 예정인가요?",
+                "suggestions": ["1명", "2명", "3명", "5명", "10명"]
             },
             "headcount": {
-                "general_q": "채용 인원은 말 그대로 몇 명의 직원을 뽑을지 묻는 항목입니다. 1명, 2명 등으로 정확히 알려주시면 돼요. 몇 분을 채용하실 계획이신가요?",
-                "what_to_write": "채용 인원은 숫자로 기재하시면 됩니다. '1명', '3명' 처럼요. 필요에 따라 '0명 (충원 완료)' 또는 'N명 (상시)'으로 표기할 수도 있습니다. 몇 명을 채용하시겠어요?",
-                "example": "예시로 '1명', '2명', '3명 이상' 등이 있습니다. 몇 분을 채용하실 예정이세요?",
+                "question": "어떤 업무를 담당하게 될까요?",
+                "suggestions": ["개발", "디자인", "마케팅", "영업", "기획", "고객지원"]
             },
-            "workType": {
-                "general_q": "주요 업무는 채용될 직원이 어떤 일을 하게 될지 구체적으로 명시하는 부분입니다. 지원자들이 자신의 역량과 맞는지 판단할 중요한 기준이 되죠. 어떤 업무를 담당할 예정인가요?",
-                "what_to_write": "주요 업무는 구체적인 직무 내용을 담는 것이 좋습니다. 예를 들어 '백엔드 서비스 개발 및 운영', '신규 모바일 앱 UI/UX 디자인', '디지털 마케팅 전략 수립 및 실행'처럼요. 어떤 업무를 담당할 인력을 찾고 계신가요?",
-                "example": "예시로는 'Python 기반 웹 백엔드 개발', '광고 캠페인 기획 및 성과 분석', '신규 고객사 발굴 및 계약 관리' 등이 있습니다. 어떤 주요 업무를 입력하시겠어요?",
+            "mainDuties": {
+                "question": "근무 시간은 어떻게 되나요?",
+                "suggestions": ["09:00-18:00", "10:00-19:00", "유연근무제", "시차출근제"]
             },
             "workHours": {
-                "general_q": "근무 시간은 채용될 직원의 근무 스케줄을 나타냅니다. 보통 정규 근무 시간, 유연근무 여부, 재택근무 가능 여부 등을 기재해요. 근무 시간은 어떻게 되나요?",
-                "what_to_write": "일반적으로 '주 5일, 09:00 ~ 18:00' 형태로 기재합니다. 유연근무나 재택근무가 가능하다면 '주 5일 (유연근무 가능)', '재택근무 병행 가능' 등으로 명시할 수 있어요. 희망하는 근무 시간을 알려주세요.",
-                "example": "예시: '주 5일, 10:00 ~ 19:00', '주 5일 (유연근무제)', '탄력 근무제 (협의 후 결정)'. 어떻게 기재하시겠어요?",
+                "question": "근무 요일은 어떻게 되나요?",
+                "suggestions": ["월-금", "월-토", "주5일", "주6일"]
             },
-            "location": {
-                "general_q": "근무 위치는 직무가 수행될 실제 장소를 의미합니다. 정확한 주소나 최소한 도시/구 단위까지 명시하는 것이 좋아요. 근무지는 어디로 등록하시겠어요?",
-                "what_to_write": "근무 위치는 정확한 주소(예: '서울특별시 강남구 테헤란로 123')를 기재하거나, 최소한 '서울시 강남구', '경기도 성남시 분당구' 등으로 명확히 작성해 주세요. 만약 원격 근무가 기본이라면 '원격 근무 (전국)' 등으로 기재할 수도 있습니다. 근무 위치를 알려주시겠어요?",
-                "example": "예시: '서울특별시 서초구 서초대로 123 (강남역 부근)', '판교 테크노밸리', '전국 (원격근무)'. 어디로 입력하시겠어요?",
+            "workDays": {
+                "question": "근무 위치는 어디인가요?",
+                "suggestions": ["서울", "부산", "대구", "인천", "대전", "광주", "울산"]
+            },
+            "locationCity": {
+                "question": "구체적인 지역을 알려주세요.",
+                "suggestions": ["강남구", "서초구", "마포구", "종로구", "중구"]
+            },
+            "locationDistrict": {
+                "question": "급여 조건은 어떻게 되나요?",
+                "suggestions": ["면접 후 협의", "3000만원", "4000만원", "5000만원", "6000만원"]
             },
             "salary": {
-                "general_q": "급여 조건은 채용될 직원의 보수와 관련된 부분입니다. 연봉, 월급, 또는 면접 후 협의 등으로 기재할 수 있어요. 급여 조건은 어떻게 되나요?",
-                "what_to_write": "급여는 연봉 또는 월급으로 구체적인 액수를 기재하거나, '면접 후 협의'로 표기할 수 있습니다. 예를 들어 '연봉 3,500만원 이상', '월 250만원', '면접 후 협의' 등으로 기재할 수 있어요. 급여 조건은 어떻게 설정하시겠어요?",
-                "example": "예시: '연봉 4,000만원 ~ 5,000만원', '면접 후 협의 (경력에 따라 차등)', '회사 내규에 따름'. 어떻게 작성하시겠어요?",
+                "question": "마감일은 언제인가요?",
+                "suggestions": ["2024년 12월 31일", "2024년 11월 30일", "채용 시 마감", "상시채용"]
             },
             "deadline": {
-                "general_q": "마감일은 지원서를 제출할 수 있는 최종 기한입니다. 보통 특정 날짜를 지정하거나, '채용 시 마감'으로 설정하기도 해요. 언제까지 지원을 받을 예정이신가요?",
-                "what_to_write": "마감일은 'YYYY년 MM월 DD일' 형식으로 기재하거나, '채용 시 마감'이라고 명시할 수 있습니다. 예를 들어 '2025년 7월 31일' 또는 '채용 완료 시'처럼요. 언제로 마감일을 설정하시겠어요?",
-                "example": "예시: '2025년 8월 15일', '별도 공지 시까지', '상시 채용'. 언제로 마감하시겠어요?",
-            },
-            "email": {
-                "general_q": "연락처 이메일은 지원자들이 궁금한 점이 있을 때 문의할 수 있는 담당자의 이메일 주소입니다. 이메일 주소를 알려주세요.",
-                "what_to_write": "지원자들에게 노출될 담당자 이메일 주소를 입력하시면 됩니다. 'recruit@company.com'과 같은 채용 전용 이메일을 사용하시는 것이 일반적입니다. 어떤 이메일 주소를 기재하시겠어요?",
-                "example": "예시: 'hr@yourcompany.com', 'recruit@example.co.kr'. 이메일 주소를 알려주세요.",
+                "question": "연락처 이메일을 알려주세요.",
+                "suggestions": ["hr@company.com", "recruit@company.com", "인사팀 이메일"]
             }
         }
         
-        if "어떻게 작성해야 할까요" in user_input or "뭐가 좋을까요" in user_input or "어떤게 있나요" in user_input or "보통 이럴때 무슨 말들을 쓸까" in user_input:
-            message = response_map_for_questions.get(current_field, {}).get("what_to_write", f"{current_field_label}을/를 어떻게 작성할지 궁금하시군요. 일반적으로 이렇게 작성합니다: (관련 예시/설명 추가). 어떤 내용을 입력하고 싶으신가요?")
-        elif "예시" in user_input:
-            message = response_map_for_questions.get(current_field, {}).get("example", f"{current_field_label}에 대한 예시를 찾으시는군요. 다음과 같은 예시가 있습니다: (관련 예시 추가). 어떤 내용을 입력하시겠어요?")
-        else:
-            message = response_map_for_questions.get(current_field, {}).get("general_q", f"{current_field_label}에 대해 궁금하신 점이 있으시군요. 어떤 부분이 더 궁금하신가요? 아니면 정보를 알려주시면 다음으로 진행할 수 있습니다. 😊")
+        # 현재 필드에 대한 다음 질문이 있는지 확인
+        next_question = ""
+        next_suggestions = []
+        if current_field in field_questions:
+            next_question = field_questions[current_field]["question"]
+            next_suggestions = field_questions[current_field]["suggestions"]
         
-        return {
-            "message": message,
-            "is_conversation": True
+        # 응답 메시지에 다음 질문 포함
+        if next_question:
+            response_message = f"'{current_field_label}'에 대해 '{field_value}'로 입력하겠습니다. {next_question}"
+        else:
+            response_message = f"'{current_field_label}'에 대해 '{field_value}'로 입력하겠습니다."
+        
+        response = {
+            "message": response_message,
+            "value": field_value,
+            "field": current_field,  # 필드명을 명시적으로 설정
+            "suggestions": next_suggestions,
+            "confidence": classification['confidence'],
+            "next_question": next_question
         }
+        print(f"[DEBUG] ===== simulate_llm_response 결과 =====")
+        print(f"[DEBUG] 최종 결과: {response}")
+        print("[DEBUG] ===== simulate_llm_response 완료 =====")
+        return response
 
-    # 2-3. 사용자가 현재 필드에 대한 명확한 답변을 제공한 경우
-    extracted_value = user_input.strip() 
+async def call_gemini_api(prompt: str, conversation_history: List[Dict[str, Any]] = None) -> str:
+    """
+    Gemini API 호출 함수 (RAG 적용)
+    """
+    try:
+        if not model:
+            return "AI 서비스를 사용할 수 없습니다. 다시 시도해 주세요."
+        
+        # --- RAG 로직 추가 시작 ---
+        # 1. 사용자 질문을 기반으로 가장 관련성 높은 문서 검색
+        relevant_context = await find_relevant_document(prompt)
+        
+        # 2. 검색된 문서를 컨텍스트로 프롬프트에 추가
+        rag_prompt = f"""
+        당신은 채용 전문 어시스턴트입니다. 사용자가 채용 공고 작성이나 채용 관련 질문을 할 때 전문적이고 실용적인 답변을 제공해주세요.
 
-    if current_field == "headcount":
-        import re
-        match = re.search(r'(\d+)\s*명|(\d+)', user_input)
-        if match:
-            extracted_value = f"{match.group(1) or match.group(2)}명"
-        else:
-            return {
-                "message": f"몇 분을 채용하실지 숫자로 알려주실 수 있을까요? 예를 들어 '2명'처럼요. 😊",
-                "is_conversation": True
-            }
-    elif current_field == "email":
-        if "@" not in extracted_value:
-            return {
-                "message": "이메일 형식이 올바르지 않은 것 같아요. '@'가 포함된 정확한 이메일 주소를 알려주실 수 있을까요?",
-                "is_conversation": True
-            }
-    elif current_field == "salary":
-        if "만원" in extracted_value or "협의" in extracted_value or "내규" in extracted_value or "면접" in extracted_value:
-            pass
-        else:
-            return {
-                "message": "급여 조건은 '연봉 3000만원' 또는 '면접 후 협의'처럼 구체적으로 알려주시면 감사하겠습니다. 어떻게 기재하시겠어요?",
-                "is_conversation": True
-            }
-            
-    confirmation_message = ""
-    if current_field == "department":
-        confirmation_message = f"네, **'{extracted_value}'** 부서로 확인했습니다. 잘 알겠습니다!"
-    elif current_field == "headcount":
-        confirmation_message = f"**'{extracted_value}'**을/를 채용하시는군요. 알겠습니다!"
-    elif current_field == "workType":
-        confirmation_message = f"주요 업무는 **'{extracted_value}'**이군요. 상세하게 잘 적어주셨어요!"
-    elif current_field == "workHours":
-        confirmation_message = f"**'{extracted_value}'**으로 근무 시간을 확인했습니다. 좋아요!"
-    elif current_field == "location":
-        confirmation_message = f"근무 위치는 **'{extracted_value}'**이군요. 확인했습니다!"
-    elif current_field == "salary":
-        confirmation_message = f"급여 조건은 **'{extracted_value}'**으로 설정하시는군요. 알겠습니다!"
-    elif current_field == "deadline":
-        confirmation_message = f"마감일은 **'{extracted_value}'**이군요. 확인했습니다!"
-    elif current_field == "email":
-        confirmation_message = f"연락처 이메일은 **'{extracted_value}'**으로 등록해 드릴게요. 모든 정보가 입력되었습니다!"
-    else:
-        confirmation_message = f"**'{current_field_label}'**에 대해 **'{extracted_value}'**이라고 말씀해주셨군요. 확인했습니다!"
+        **추가 정보:**
+        아래에 제공된 정보를 활용하여 답변의 정확성과 신뢰도를 높여주세요.
+        ---
+        {relevant_context}
+        ---
 
-    return {
-        "field": current_field,
-        "value": extracted_value,
-        "message": confirmation_message,
-        "is_conversation": False
-    }
-    
+        **주의사항:**
+        - AI 모델에 대한 설명은 하지 마세요
+        - 채용 관련 실무적인 조언을 제공하세요
+        - 구체적이고 실용적인 답변을 해주세요
+        - 한국어로 답변해주세요
+        - 모든 답변은 핵심만 간단하게 요약해서 2~3줄 이내로 작성해주세요
+        - 불필요한 설명은 생략하고, 요점 위주로 간결하게 답변해주세요
+        - '주요 업무'를 작성할 때는 지원자 입장에서 직무 이해도가 높아지도록 구체적인 동사(예: 개발, 분석, 관리 등)를 사용하세요
+        - 각 업무는 "무엇을 한다 → 왜 한다" 구조로, 기대 성과까지 간결히 포함해서 자연스럽고 명확하게 서술하세요
+        - 번호가 있는 항목(1, 2, 3 등)은 각 줄마다 줄바꿈하여 출력해주세요
+
+        **특별 지시:** 사용자가 '적용해줘', '입력해줘', '이걸로 해줘' 등의 선택적 명령어를 입력하면,  
+        직전 AI가 제시한 내용을 그대로 적용하는 동작으로 이해하고,  
+        사용자가 추가 설명을 요청하지 않는 이상 답변을 간단히 요약하며 다음 단계로 자연스럽게 넘어가세요.
+
+        **사용자 질문:** {prompt}
+        """
+        # --- RAG 로직 추가 끝 ---
+
+        # 대화 히스토리 구성
+        messages = []
+        if conversation_history:
+            for msg in conversation_history:
+                role = 'user' if msg.get('type') == 'user' else 'model'
+                messages.append({"role": role, "parts": [{"text": msg.get('content', '')}]})
+        
+        # 컨텍스트가 포함된 프롬프트 생성
+        messages.append({"role": "user", "parts": [{"text": rag_prompt}]})
+        
+        # Gemini API 호출
+        response = await model.generate_content_async(
+            messages,
+            safety_settings=[
+                {
+                    "category": "HARM_CATEGORY_HARASSMENT",
+                    "threshold": "BLOCK_NONE"
+                },
+                {
+                    "category": "HARM_CATEGORY_HATE_SPEECH", 
+                    "threshold": "BLOCK_NONE"
+                },
+                {
+                    "category": "HARM_CATEGORY_SEXUALLY_EXPLICIT",
+                    "threshold": "BLOCK_NONE"
+                },
+                {
+                    "category": "HARM_CATEGORY_DANGEROUS_CONTENT",
+                    "threshold": "BLOCK_NONE"
+                }
+            ]
+        )
+        
+        return response.text
+        
+    except Exception as e:
+        print(f"[ERROR] Gemini API 호출 실패: {e}")
+        traceback.print_exc()
+        return f"AI 응답을 가져오는 데 실패했습니다. 다시 시도해 주세요. (오류: {str(e)})"
+
 @router.post("/suggestions")
 async def get_suggestions(request: SuggestionsRequest):
     """필드별 제안 가져오기"""
+    print("[DEBUG] /suggestions 요청:", request)
     suggestions = get_field_suggestions(request.field, request.context)
-    return {"suggestions": suggestions}
+    response = {"suggestions": suggestions}
+    print("[DEBUG] /suggestions 응답:", response)
+    return response
 
 @router.post("/validate")
 async def validate_field(request: ValidationRequest):
     """필드 값 검증"""
+    print("[DEBUG] /validate 요청:", request)
     validation_result = validate_field_value(request.field, request.value, request.context)
-    return validation_result
+    response = validation_result
+    print("[DEBUG] /validate 응답:", response)
+    return response
 
 @router.post("/autocomplete")
 async def smart_autocomplete(request: AutoCompleteRequest):
     """스마트 자동 완성"""
-    completions = get_autocomplete_suggestions(request.partial_input, request.field, request.context)
-    return {"completions": completions}
+    print("[DEBUG] /autocomplete 요청:", request)
+    suggestions = get_autocomplete_suggestions(request.partial_input, request.field, request.context)
+    response = {"completions": completions}
+    print("[DEBUG] /autocomplete 응답:", response)
+    return response
 
 @router.post("/recommendations")
 async def get_recommendations(request: RecommendationsRequest):
     """컨텍스트 기반 추천"""
+    print("[DEBUG] /recommendations 요청:", request)
     recommendations = get_contextual_recommendations(request.current_field, request.filled_fields, request.context)
-    return {"recommendations": recommendations}
+    response = {"recommendations": recommendations}
+    print("[DEBUG] /recommendations 응답:", response)
+    return response
 
 @router.post("/update-field")
 async def update_field_in_realtime(request: FieldUpdateRequest):
     """실시간 필드 업데이트"""
+    print("[DEBUG] /update-field 요청:", request)
     if request.session_id in modal_sessions:
         modal_sessions[request.session_id]["filled_fields"][request.field] = request.value
-        return {"status": "success", "message": "필드가 업데이트되었습니다."}
+        response = {"status": "success", "message": "필드가 업데이트되었습니다."}
+        print("[DEBUG] /update-field 응답:", response)
+        return response
     else:
+        print("[ERROR] /update-field 유효하지 않은 세션:", request.session_id)
         raise HTTPException(status_code=400, detail="유효하지 않은 세션입니다")
 
 @router.post("/end")
 async def end_session(request: dict):
     """세션 종료"""
+    print("[DEBUG] /end 요청:", request)
     session_id = request.get("session_id")
     if session_id in sessions:
         del sessions[session_id]
     if session_id in modal_sessions:
         del modal_sessions[session_id]
-    return {"status": "success", "message": "세션이 종료되었습니다."}
+    response = {"status": "success", "message": "세션이 종료되었습니다."}
+    print("[DEBUG] /end 응답:", response)
+    return response
 
 def get_questions_for_page(page: str) -> List[Dict[str, Any]]:
     """페이지별 질문 목록"""
+    print("[DEBUG] get_questions_for_page 요청:", page)
     questions_map = {
         "job_posting": [
             {"field": "department", "question": "구인 부서를 알려주세요."},
@@ -842,13 +1565,23 @@ def get_questions_for_page(page: str) -> List[Dict[str, Any]]:
             {"field": "email", "question": "연락처 이메일을 알려주세요."}
         ]
     }
-    return questions_map.get(page, [])
+    questions = questions_map.get(page, [])
+    print("[DEBUG] get_questions_for_page 응답:", questions)
+    return questions
 
 def get_field_suggestions(field: str, context: Dict[str, Any]) -> List[str]:
     """필드별 제안 목록"""
+    print("[DEBUG] get_field_suggestions 요청:", field, context)
     suggestions_map = {
-        "department": ["개발팀", "마케팅팀", "영업팀", "디자인팀", "기획팀"],
+        "department": ["개발", "기획", "마케팅", "디자인", "인사", "영업"],
         "headcount": ["1명", "2명", "3명", "5명", "10명"],
+        "mainDuties": [
+            "신규 웹 서비스 개발 및 기존 시스템 유지보수를 담당하여 사용자 경험을 개선하고 서비스 안정성을 확보합니다.",
+            "사용자 리서치 및 제품 기획을 통해 고객 니즈를 파악하고, 데이터 기반 의사결정으로 제품 경쟁력을 향상시킵니다.",
+            "브랜드 마케팅 전략 수립 및 실행을 통해 브랜드 인지도를 높이고, 타겟 고객층의 참여도를 증대시킵니다.",
+            "모바일 앱 개발 및 플랫폼 최적화를 통해 사용자 편의성을 향상시키고, 앱스토어 순위 개선을 달성합니다.",
+            "데이터 분석 및 인사이트 도출을 통해 비즈니스 성과를 측정하고, 마케팅 캠페인 효과를 최적화합니다."
+        ],
         "workType": ["웹 개발", "앱 개발", "디자인", "마케팅", "영업"],
         "workHours": ["09:00-18:00", "10:00-19:00", "유연근무제"],
         "location": ["서울", "부산", "대구", "인천", "대전"],
@@ -856,27 +1589,379 @@ def get_field_suggestions(field: str, context: Dict[str, Any]) -> List[str]:
         "deadline": ["2024년 12월 31일", "2024년 11월 30일", "채용 시 마감"],
         "email": ["hr@company.com", "recruit@company.com"]
     }
-    return suggestions_map.get(field, [])
+    suggestions = suggestions_map.get(field, [])
+    print("[DEBUG] get_field_suggestions 응답:", suggestions)
+    return suggestions
 
 def validate_field_value(field: str, value: str, context: Dict[str, Any]) -> Dict[str, Any]:
     """필드 값 검증"""
+    print("[DEBUG] validate_field_value 요청:", field, value, context)
     if field == "email" and "@" not in value:
-        return {"valid": False, "message": "올바른 이메일 형식을 입력해주세요."}
+        response = {"valid": False, "message": "올바른 이메일 형식을 입력해주세요."}
+        print("[DEBUG] validate_field_value 응답 (이메일 형식 오류):", response)
+        return response
     elif field == "headcount" and not any(char.isdigit() for char in value):
-        return {"valid": False, "message": "숫자를 포함한 인원 수를 입력해주세요."}
+        response = {"valid": False, "message": "숫자를 포함한 인원 수를 입력해주세요."}
+        print("[DEBUG] validate_field_value 응답 (헤드카운트 숫자 오류):", response)
+        return response
     else:
-        return {"valid": True, "message": "올바른 형식입니다."}
+        response = {"valid": True, "message": "올바른 형식입니다."}
+        print("[DEBUG] validate_field_value 응답 (유효):", response)
+        return response
 
 def get_autocomplete_suggestions(partial_input: str, field: str, context: Dict[str, Any]) -> List[str]:
     """자동 완성 제안"""
+    print("[DEBUG] get_autocomplete_suggestions 요청:", partial_input, field, context)
     suggestions = get_field_suggestions(field, context)
-    return [s for s in suggestions if partial_input.lower() in s.lower()]
+    completions = [s for s in suggestions if partial_input.lower() in s.lower()]
+    print("[DEBUG] get_autocomplete_suggestions 응답:", completions)
+    return completions
 
 def get_contextual_recommendations(current_field: str, filled_fields: Dict[str, Any], context: Dict[str, Any]) -> List[str]:
-    """컨텍스트 기반 추천"""
-    if current_field == "workType" and filled_fields.get("department") == "개발팀":
-        return ["웹 개발", "앱 개발", "백엔드 개발", "프론트엔드 개발"]
-    elif current_field == "salary" and filled_fields.get("workType") == "개발":
-        return ["4000만원", "5000만원", "6000만원", "면접 후 협의"]
+    """현재 필드에 대한 컨텍스트 기반 추천사항 생성"""
+    recommendations = []
+    
+    if current_field == "mainDuties":
+        recommendations = [
+            "개발 및 유지보수",
+            "코드 리뷰 및 품질 관리",
+            "기술 문서 작성",
+            "팀 협업 및 커뮤니케이션"
+        ]
+    elif current_field == "requirements":
+        recommendations = [
+            "관련 경험 3년 이상",
+            "학사 학위 이상",
+            "팀워크 능력",
+            "문제 해결 능력"
+        ]
+    
+    return recommendations
+
+def parse_response_items(response_text: str) -> List[Dict[str, Any]]:
+    """LLM 응답을 항목별로 분할하여 선택 가능한 형태로 변환"""
+    items = []
+    
+    # 줄바꿈으로 분할
+    lines = response_text.strip().split('\n')
+    current_item = ""
+    item_counter = 1
+    
+    for line in lines:
+        line = line.strip()
+        if not line:
+            continue
+            
+        # 번호가 있는 항목인지 확인 (1., 2., 3. 등)
+        if re.match(r'^\d+\.', line):
+            # 이전 항목이 있으면 저장
+            if current_item:
+                items.append({
+                    "id": f"item_{item_counter}",
+                    "text": current_item.strip(),
+                    "selected": False
+                })
+                item_counter += 1
+            
+            # 새 항목 시작
+            current_item = line
+        else:
+            # 번호가 없는 줄은 현재 항목에 추가
+            if current_item:
+                current_item += " " + line
+            else:
+                # 첫 번째 항목인 경우
+                current_item = line
+    
+    # 마지막 항목 저장
+    if current_item:
+        items.append({
+            "id": f"item_{item_counter}",
+            "text": current_item.strip(),
+            "selected": False
+        })
+    
+    # 항목이 없으면 전체 텍스트를 하나의 항목으로 처리
+    if not items:
+        items.append({
+            "id": "item_1",
+            "text": response_text.strip(),
+            "selected": False
+        })
+    
+    return items
+
+@router.post("/chat")
+async def chat_endpoint(request: ChatbotRequest):
+    """
+    키워드 기반 1차 분류 → LLM 호출 → 응답 처리 API
+    """
+    print("[DEBUG] /chat 요청:", request)
+    
+    try:
+        user_input = request.user_input
+        conversation_history = request.conversation_history
+        
+        if not user_input:
+            raise HTTPException(status_code=400, detail="사용자 입력이 필요합니다.")
+        
+        # 1) 키워드 기반 1차 분류
+        classification = classify_input(user_input)
+        print(f"[DEBUG] /chat 분류 결과: {classification}")
+        
+        # 2) 분류된 결과에 따른 처리
+        if classification['type'] == 'field':
+            # 필드 값으로 처리
+            field_value = classification.get('value', user_input.strip())
+            response = {
+                "type": "field",
+                "content": f"{classification['category']}: {field_value}로 설정되었습니다.",
+                "value": field_value,
+                "confidence": classification['confidence']
+            }
+            
+        elif classification['type'] == 'question':
+            # 3) Gemini API 호출로 답변 생성
+            ai_response = await call_gemini_api(user_input, conversation_history)
+            response = {
+                "type": "answer",
+                "content": ai_response,
+                "confidence": classification['confidence']
+            }
+            
+        elif classification['type'] == 'chat':
+            # 일상 대화 처리
+            response = {
+                "type": "chat",
+                "content": "안녕하세요! 채용 관련 문의사항이 있으시면 언제든 말씀해 주세요.",
+                "confidence": classification['confidence']
+            }
+            
+        else:
+            # 답변인 경우 기본 처리 (자동 완성)
+            response = {
+                "type": "answer",
+                "content": f"'{user_input}'로 입력하겠습니다. 다음 단계로 진행하겠습니다.",
+                "value": user_input.strip(),
+                "confidence": classification['confidence']
+            }
+        
+        print("[DEBUG] /chat 응답:", response)
+        return response
+        
+    except Exception as e:
+        print(f"[ERROR] /chat 예외: {e}")
+        traceback.print_exc()
+        raise HTTPException(status_code=500, detail=f"처리 중 오류가 발생했습니다: {str(e)}")
+
+def classify_input_with_priority(text: str, current_field: str = None) -> dict:
+    """
+    우선순위 기반 분류: 키워드 > 맥락
+    1단계: 명확한 키워드 매칭
+    2단계: 맥락 분석 (질문형 vs 답변형)
+    """
+    text_lower = text.lower()
+    text_length = len(text.strip())
+    
+    print(f"[DEBUG] ===== classify_input_with_priority 시작 =====")
+    print(f"[DEBUG] 입력 텍스트: {text}")
+    print(f"[DEBUG] 현재 필드: {current_field}")
+    
+    # 1단계: 명확한 키워드 매칭 (최우선)
+    
+    # 1-1. 명확한 질문 키워드 (절대적 우선순위)
+    strong_question_keywords = [
+        "어떻게", "왜", "무엇", "뭐", "언제", "어디", "궁금", "알려줘", "설명해줘",
+        "몇명", "몇 명", "얼마나", "어느 정도", "어떤 정도", "어떤", "무슨",
+        "있을까", "있나요", "인가요", "일까", "될까", "할까", "어때", "어떠"
+    ]
+    
+    matched_strong_questions = [kw for kw in strong_question_keywords if kw in text_lower]
+    if matched_strong_questions:
+        print(f"[DEBUG] 1단계 - 강한 질문 키워드 감지: {matched_strong_questions}")
+        return {'type': 'question', 'category': 'strong_question', 'confidence': 0.95}
+    
+    # 1-2. 명확한 답변 키워드 (현재 필드 기준)
+    if current_field:
+        field_keywords = get_field_keywords(current_field)
+        matched_answer_keywords = [kw for kw in field_keywords if kw in text_lower]
+        if matched_answer_keywords:
+            print(f"[DEBUG] 1단계 - 답변 키워드 감지: {matched_answer_keywords}")
+            # 키워드가 있더라도 맥락 검토 필요
+            pass
+    
+    # 2단계: 맥락 분석 (질문형 vs 답변형)
+    
+    # 2-1. 질문형 맥락 분석
+    question_patterns = [
+        # 의문사 패턴
+        r'\b(어떻게|왜|무엇|뭐|언제|어디|어느|어떤|무슨)\b',
+        # 추측/제안 패턴
+        r'\b(있을까|있나요|인가요|일까|될까|할까|어때|어떠)\b',
+        # 비교/선택 패턴
+        r'\b(어느\s*것|어떤\s*것|무슨\s*것)\b',
+        # 조건부 질문 패턴
+        r'\b(만약|만일|혹시|혹은)\b.*\b(어떻게|어떤|무슨)\b',
+        # 제안형 질문 패턴
+        r'\b(그럼|그렇다면|그러면)\b.*\b(어떻게|어떤|무슨|어때)\b'
+    ]
+    
+    import re
+    for pattern in question_patterns:
+        if re.search(pattern, text_lower):
+            print(f"[DEBUG] 2단계 - 질문형 맥락 감지: {pattern}")
+            return {'type': 'question', 'category': 'context_question', 'confidence': 0.9}
+    
+    # 2-2. 답변형 맥락 분석
+    answer_patterns = [
+        # 확정적 답변 패턴
+        r'\b(으로|로|입니다|입니다|입니다|입니다)\b',
+        # 구체적 수치/값 패턴
+        r'\b(\d+명|\d+만원|\d+시|\d+분)\b',
+        # 명령/요청 패턴
+        r'\b(해줘|해주세요|해주시면|해주시고)\b',
+        # 동의/확인 패턴
+        r'\b(네|예|좋아|알겠|그래|응|오케이)\b'
+    ]
+    
+    for pattern in answer_patterns:
+        if re.search(pattern, text_lower):
+            print(f"[DEBUG] 2단계 - 답변형 맥락 감지: {pattern}")
+            # 답변형이지만 추가 검증 필요
+            pass
+    
+    # 3단계: 최종 분류
+    if current_field and has_field_keywords(text, current_field):
+        if is_valid_answer_for_field(text, current_field):
+            extracted_value = extract_field_value(text, current_field, get_field_config(current_field))
+            print(f"[DEBUG] 3단계 - 답변으로 최종 분류, 추출값: {extracted_value}")
+            return {
+                'type': 'answer',
+                'category': current_field,
+                'value': extracted_value,
+                'confidence': 0.85
+            }
+    
+    # 기본값: 질문으로 분류 (안전한 기본값)
+    print(f"[DEBUG] 3단계 - 기본값: 질문으로 분류")
+    return {'type': 'question', 'category': 'general', 'confidence': 0.7}
+
+def get_field_keywords(field: str) -> list:
+    """필드별 키워드 반환"""
+    field_keywords = {
+        'department': ['개발팀', '마케팅팀', '영업팀', '디자인팀', '기획팀', '인사팀', '개발', '마케팅', '영업', '디자인', '기획', '인사'],
+        'headcount': ['명', '인원', '사람', '1명', '2명', '3명', '4명', '5명', '6명', '7명', '8명', '9명', '10명'],
+        'mainDuties': ['개발', '디자인', '마케팅', '영업', '기획', '관리', '운영', '분석', '설계', '테스트', '유지보수'],
+        'workHours': ['시', '분', '시간', '09:00', '10:00', '18:00', '19:00', '유연근무', '재택근무'],
+        'location': ['서울', '부산', '대구', '인천', '대전', '광주', '울산', '세종', '경기', '강원', '충북', '충남', '전북', '전남', '경북', '경남', '제주'],
+        'salary': ['만원', '원', '연봉', '월급', '급여', '보수', '임금', '면접', '협의'],
+        'deadline': ['년', '월', '일', '마감', '지원', '채용', '마감일'],
+        'contactEmail': ['@', '이메일', 'email', '메일', 'mail']
+    }
+    return field_keywords.get(field, [])
+
+def get_field_config(field: str) -> dict:
+    """필드별 설정 반환"""
+    field_configs = {
+        'department': {'extract_value': True},
+        'headcount': {'extract_value': True, 'extract_number': True},
+        'mainDuties': {'extract_value': True},
+        'workHours': {'extract_value': True},
+        'location': {'extract_value': True},
+        'salary': {'extract_value': True, 'extract_number': True},
+        'deadline': {'extract_value': True},
+        'contactEmail': {'extract_value': True}
+    }
+    return field_configs.get(field, {})
+
+def has_field_keywords(text: str, field: str) -> bool:
+    """텍스트에 해당 필드의 키워드가 포함되어 있는지 확인"""
+    keywords = get_field_keywords(field)
+    text_lower = text.lower()
+    return any(kw in text_lower for kw in keywords)
+
+async def generate_ai_assistant_response(user_input: str, field: Dict[str, Any], session: Dict[str, Any]) -> Dict[str, Any]:
+    """AI 도우미용 응답 생성 (개선된 Gemini API 사용)"""
+    print("[DEBUG] ===== AI 어시스턴트 응답 생성 시작 =====")
+    print("[DEBUG] 사용자 입력:", user_input)
+    print("[DEBUG] 현재 필드:", field)
+    print("[DEBUG] 세션 정보:", session)
+    
+    field_key = field.get("key", "")
+    field_label = field.get("label", "")
+    print(f"[DEBUG] 필드 키: {field_key}, 필드 라벨: {field_label}")
+    
+    # 1) 키워드 기반 1차 분류
+    classification = classify_input(user_input)
+    print(f"[DEBUG] 분류 결과: {classification}")
+    print(f"[DEBUG] 분류 타입: {classification.get('type')}")
+    print(f"[DEBUG] 분류 카테고리: {classification.get('category')}")
+    print(f"[DEBUG] 분류 값: {classification.get('value')}")
+    print(f"[DEBUG] 신뢰도: {classification.get('confidence')}")
+    
+    # 2) 분류된 결과에 따른 처리
+    if classification['type'] == 'question':
+        # 질문인 경우 Gemini API 호출
+        try:
+            ai_assistant_context = f"""
+현재 채용 공고 작성 중입니다. 현재 필드: {field_label} ({field_key})
+
+사용자 질문: {user_input}
+
+이 질문에 대해 채용 공고 작성에 도움이 되는 실무적인 답변을 제공해주세요.
+"""
+            ai_response = await call_gemini_api(ai_assistant_context)
+            
+            # 응답을 항목별로 분할
+            items = parse_response_items(ai_response)
+            
+            response = {
+                "message": ai_response,
+                "value": None,  # 질문이므로 value는 None
+                "field": field_key,
+                "suggestions": [],
+                "confidence": classification['confidence'],
+                "items": items,
+                "show_item_selection": True  # 항목 선택 UI 표시
+            }
+            print(f"[DEBUG] 질문 응답 (항목 선택 포함): {response}")
+            return response
+            
+        except Exception as e:
+            print(f"[ERROR] Gemini API 호출 실패: {e}")
+            # 오프라인 응답으로 대체
+            response = {
+                "message": f"'{user_input}'에 대한 답변을 제공해드리겠습니다. 현재 필드 '{field_label}'에 대한 정보를 입력해주세요.",
+                "value": None,
+                "field": field_key,
+                "suggestions": [],
+                "confidence": 0.5
+            }
+            return response
+    elif classification['type'] == 'chat':
+        # 일상 대화 처리
+        response = {
+            "message": f"안녕하세요! 채용 공고 작성에 도와드리고 있습니다. 현재 {field_label}에 대한 정보를 입력해주세요.",
+            "value": None,
+            "field": field_key,
+            "suggestions": [],
+            "confidence": classification['confidence']
+        }
+        print(f"[DEBUG] 일상 대화 응답: {response}")
+        return response
     else:
-        return get_field_suggestions(current_field, context)
+        # 답변인 경우 (개선된 처리)
+        field_value = classification.get('value', user_input)
+        print(f"[DEBUG] 답변 처리 결과 - 필드: {field_key}, 값: {field_value}")
+        
+        response = {
+            "message": f"'{field_label}'에 대해 '{field_value}'로 입력하겠습니다.",
+            "value": field_value,
+            "field": field_key,
+            "suggestions": [],
+            "confidence": classification['confidence']
+        }
+        print(f"[DEBUG] ===== AI 어시스턴트 응답 생성 완료 =====")
+        print(f"[DEBUG] 최종 결과: {response}")
+        print("[DEBUG] ===== AI 어시스턴트 응답 생성 완료 =====")
+        return response

@@ -1,13 +1,281 @@
-import React, { useState, useEffect, useRef } from 'react';
-import styled from 'styled-components';
+import React, { useState, useEffect, useRef, useCallback } from 'react';
+import styled, { keyframes } from 'styled-components';
+
+// ==========================================================
+// AI 서비스 클래스: 백엔드 API와의 통신 담당
+// ==========================================================
+class AIChatbotService {
+  constructor() {
+    this.baseURL = 'http://localhost:8000';
+    this.sessionId = null;
+    this.conversationHistory = [];
+  }
+
+  // AI 세션 시작
+  async startSession(page, fields) {
+    try {
+      const response = await fetch(`${this.baseURL}/api/chatbot/start`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          page,
+          fields,
+          mode: 'modal_assistant'
+        })
+      });
+
+      if (!response.ok) {
+        throw new Error('AI 세션 시작 실패');
+      }
+
+      const data = await response.json();
+      this.sessionId = data.session_id;
+      console.log('[AIChatbotService] 세션 시작:', this.sessionId);
+      return data;
+    } catch (error) {
+      console.error('[AIChatbotService] 세션 시작 오류:', error);
+      // 오프라인 모드로 전환
+      return this.startOfflineSession(page, fields);
+    }
+  }
+
+  // AI 메시지 전송
+  async sendMessage(userInput, currentField, context = {}) {
+    try {
+      const response = await fetch(`${this.baseURL}/api/chatbot/ask`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          session_id: this.sessionId,
+          user_input: userInput,
+          current_field: currentField?.key || null,
+          context,
+          mode: 'modal_assistant'
+        })
+      });
+
+      if (!response.ok) {
+        throw new Error('AI 메시지 전송 실패');
+      }
+
+      const data = await response.json();
+      this.conversationHistory.push({
+        type: 'user',
+        content: userInput,
+        timestamp: new Date()
+      });
+      this.conversationHistory.push({
+        type: 'ai',
+        content: data.message,
+        timestamp: new Date()
+      });
+
+      return data;
+    } catch (error) {
+      console.error('[AIChatbotService] 메시지 전송 오류:', error);
+      // 오프라인 모드로 처리
+      return this.processOffline(userInput, currentField, context);
+    }
+  }
+
+  // 필드 업데이트
+  async updateField(field, value) {
+    try {
+      const response = await fetch(`${this.baseURL}/api/chatbot/update-field`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          session_id: this.sessionId,
+          field,
+          value
+        })
+      });
+
+      if (!response.ok) {
+        throw new Error('필드 업데이트 실패');
+      }
+
+      return await response.json();
+    } catch (error) {
+      console.error('[AIChatbotService] 필드 업데이트 오류:', error);
+      return { success: false, error: error.message };
+    }
+  }
+
+  // 오프라인 세션 시작
+  startOfflineSession(page, fields) {
+    console.log('[AIChatbotService] 오프라인 모드로 전환');
+    this.sessionId = 'offline-' + Date.now();
+    return {
+      session_id: this.sessionId,
+      mode: 'offline',
+      message: '오프라인 모드로 전환되었습니다.'
+    };
+  }
+
+
+
+  // 오프라인 메시지 처리 (순수 LLM 모델)
+  processOffline(userInput, currentField, context) {
+    console.log('[AIChatbotService] 오프라인 메시지 처리:', userInput);
+    
+    // 순수 LLM 응답 생성
+    let message = '';
+    let value = null;
+    let needMoreDetail = true;
+    let autoFillSuggestions = [];
+
+    // 사용자 입력에 대한 자연스러운 응답
+    if (currentField) {
+      message = `현재 "${currentField.label}" 필드에 대해 입력해주세요.`;
+    } else {
+      message = '어떤 도움이 필요하신가요?';
+    }
+
+    return {
+      message,
+      value,
+      needMoreDetail,
+      autoFillSuggestions,
+      mode: 'offline'
+    };
+  }
+
+  // 세션 종료
+  async endSession() {
+    if (this.sessionId && !this.sessionId.startsWith('offline-')) {
+      try {
+        await fetch(`${this.baseURL}/api/chatbot/end`, {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+          },
+          body: JSON.stringify({
+            session_id: this.sessionId
+          })
+        });
+      } catch (error) {
+        console.error('[AIChatbotService] 세션 종료 오류:', error);
+      }
+    }
+    this.sessionId = null;
+    this.conversationHistory = [];
+  }
+}
+
+// ==========================================================
+// Helper Functions: 유틸리티 함수들
+// ==========================================================
+
+
+
+// 기본 필드 제안
+const getFieldSuggestions = (fieldKey, formData = {}) => {
+  switch (fieldKey) {
+    case 'department':
+      return ['개발', '기획', '마케팅', '디자인', '인사', '영업'];
+    case 'headcount':
+      return ['1명', '2명', '3명', '5명', '10명'];
+    case 'mainDuties':
+      return [
+        '신규 웹 서비스 개발 및 기존 시스템 유지보수',
+        '사용자 리서치 및 제품 기획',
+        '브랜드 마케팅 전략 수립 및 실행',
+        '모바일 앱 개발 및 플랫폼 최적화',
+        '데이터 분석 및 인사이트 도출'
+      ];
+    case 'workHours':
+      return ['주 5일 근무', '유연근무제', '재택근무 가능', '시차출근제'];
+    case 'salary':
+      return ['연봉 협의', '연봉 3,000만원', '연봉 4,000만원', '시급 15,000원'];
+    case 'contactEmail':
+      return ['hr@company.com', 'recruit@company.com', 'jobs@company.com'];
+    case 'experience':
+      return ['신입', '경력 1년 이상', '경력 3년 이상', '경력 5년 이상', '경력 무관'];
+    case 'requiredExperience':
+      return ['React, Node.js 2년 이상', '데이터 분석 및 시각화', '영어 커뮤니케이션'];
+    case 'preferredQualifications':
+      return ['AWS 클라우드 경험', 'Git 협업 경험', '애자일 방법론 경험'];
+    default:
+      return [];
+  }
+};
+
+// 파일 저장/다운로드 유틸리티
+const getFormattedContent = (formData) => {
+  const safeFormData = formData || {};
+  
+  const contentParts = [
+    `**[채용공고 초안]**`,
+    `----------------------------------------`,
+    `**부서:** ${safeFormData.department || '미정'}`,
+    `**인원:** ${safeFormData.headcount || '미정'}`,
+    `**주요 업무:**\n${safeFormData.mainDuties || '미정'}\n`,
+    `**필요 경험/기술:**\n${safeFormData.requiredExperience || '미정'}\n`,
+    `**우대 사항:**\n${safeFormData.preferredQualifications || '없음'}\n`,
+    `----------------------------------------`,
+    `AI 채용공고 어시스턴트가 생성했습니다.`,
+  ];
+  return contentParts.join('\n');
+};
+
+const saveDraft = (formData) => {
+  const draftContent = getFormattedContent(formData);
+  try {
+    localStorage.setItem('jobPostingDraft', draftContent);
+    console.log('초안 저장됨:', draftContent);
+    return { message: "✅ 초안이 성공적으로 저장되었습니다!" };
+  } catch (error) {
+    console.error('초안 저장 실패:', error);
+    return { message: "❌ 초안 저장에 실패했습니다. 다시 시도해주세요." };
+  }
+};
+
+const downloadPDF = (formData, format = 'pdf') => {
+  const content = getFormattedContent(formData);
+  const blob = new Blob([content], { type: 'text/plain;charset=utf-8' });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url;
+  a.download = `채용공고_초안.${format === 'text' ? 'txt' : format}`;
+  document.body.appendChild(a);
+  a.click();
+  document.body.removeChild(a);
+  URL.revokeObjectURL(url);
+  return { message: `✅ 채용공고 초안이 ${format.toUpperCase()} 파일로 다운로드되었습니다!` };
+};
+
+// ==========================================================
+// Styled Components: UI 스타일링 (기존 유지)
+// ==========================================================
+
+const fadeIn = keyframes`
+  from { opacity: 0; transform: translateY(10px); }
+  to { opacity: 1; transform: translateY(0); }
+`;
+
+const slideIn = keyframes`
+  from { transform: translateX(100%); }
+  to { transform: translateX(0); }
+`;
+
+const loadingDots = keyframes`
+  0%, 80%, 100% { transform: scale(0); }
+  40% { transform: scale(1.0); }
+`;
 
 const ModalOverlay = styled.div`
-  position: fixed;
-  top: 0;
-  left: 0;
+  position: absolute;
+  width: 470px;
+  height: 923px;
   right: 0;
   bottom: 0;
-  background-color: rgba(0, 0, 0, 0.5);
   display: flex;
   align-items: center;
   justify-content: center;
@@ -19,11 +287,21 @@ const ModalContainer = styled.div`
   background: white;
   border-radius: 12px;
   box-shadow: 0 20px 60px rgba(0, 0, 0, 0.3);
+  height: 90%;
+  max-height: 90vh;
   width: 100%;
-  max-width: 900px;
-  max-height: 85vh;
   display: flex;
   overflow: hidden;
+  position: relative;
+  left: 50%;
+  top: 40%;
+  transform: translate(-50%, -50%);
+
+  @media (max-width: 768px) {
+    flex-direction: column;
+    max-width: 95%;
+    max-height: 95vh;
+  }
 `;
 
 const FormSection = styled.div`
@@ -31,23 +309,163 @@ const FormSection = styled.div`
   padding: 24px;
   border-right: 1px solid #e5e7eb;
   overflow-y: auto;
+
+  @media (max-width: 768px) {
+    border-right: none;
+    border-bottom: 1px solid #e5e7eb;
+    min-height: 200px;
+  }
 `;
 
 const ChatbotSection = styled.div`
-  width: 400px;
   background: #f8fafc;
   display: flex;
   flex-direction: column;
+  animation: ${slideIn} 0.5s ease-out;
+  width: 100%;
+  max-width: 500px;
+
+  @media (max-width: 768px) {
+    width: 100%;
+    height: 60%;
+    min-height: 300px;
+  }
 `;
 
 const ChatbotHeader = styled.div`
-  padding: 16px;
+  padding: 24px 16px;
   background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
   color: white;
-  font-weight: 600;
+  font-size: 1.1em;
+  font-weight: bold;
   display: flex;
   justify-content: space-between;
   align-items: center;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.2);
+`;
+
+const CloseButton = styled.button`
+  background: none;
+  border: none;
+  color: white;
+  font-size: 1.5em;
+  cursor: pointer;
+  padding: 0 5px;
+  transition: transform 0.2s ease-in-out;
+
+  &:hover {
+    transform: rotate(90deg);
+  }
+`;
+
+const EndConversationButton = styled.button`
+  background: rgba(255, 255, 255, 0.2);
+  border: 1px solid rgba(255, 255, 255, 0.3);
+  color: white;
+  font-size: 0.9em;
+  font-weight: 600;
+  cursor: pointer;
+  padding: 6px 12px;
+  border-radius: 6px;
+  transition: all 0.2s ease;
+  margin-right: 8px;
+
+  &:hover {
+    background: rgba(255, 255, 255, 0.3);
+    transform: translateY(-1px);
+  }
+`;
+
+const CancelButton = styled.button`
+  background: #ef4444;
+  border: none;
+  color: white;
+  font-size: 0.9em;
+  font-weight: 600;
+  cursor: pointer;
+  padding: 8px 16px;
+  border-radius: 6px;
+  transition: all 0.2s ease;
+  margin-top: 8px;
+
+  &:hover {
+    background: #dc2626;
+    transform: translateY(-1px);
+  }
+`;
+
+const ItemSelectionContainer = styled.div`
+  margin-top: 16px;
+  padding: 16px;
+  background: #f8fafc;
+  border-radius: 8px;
+  border: 1px solid #e2e8f0;
+`;
+
+const ItemCard = styled.div`
+  display: flex;
+  align-items: flex-start;
+  gap: 12px;
+  padding: 12px;
+  margin-bottom: 8px;
+  background: white;
+  border: 2px solid ${props => props.selected ? '#667eea' : '#e2e8f0'};
+  border-radius: 8px;
+  cursor: pointer;
+  transition: all 0.2s ease;
+
+  &:hover {
+    border-color: #667eea;
+    box-shadow: 0 2px 4px rgba(102, 126, 234, 0.1);
+  }
+`;
+
+const Checkbox = styled.input`
+  margin-top: 2px;
+  width: 18px;
+  height: 18px;
+  accent-color: #667eea;
+`;
+
+const ItemText = styled.div`
+  flex: 1;
+  font-size: 0.9em;
+  line-height: 1.4;
+  color: #2d3748;
+`;
+
+const ActionButtons = styled.div`
+  display: flex;
+  gap: 8px;
+  margin-top: 12px;
+  justify-content: flex-end;
+`;
+
+const ActionButton = styled.button`
+  padding: 8px 16px;
+  border-radius: 6px;
+  font-size: 0.9em;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.2s ease;
+  border: none;
+
+  ${props => props.primary ? `
+    background-color: #667eea;
+    color: white;
+    &:hover {
+      background-color: #5a67d8;
+      transform: translateY(-1px);
+    }
+  ` : `
+    background-color: #edf2f7;
+    color: #4a5568;
+    border: 1px solid #e2e8f0;
+    &:hover {
+      background-color: #e2e8f0;
+      transform: translateY(-1px);
+    }
+  `}
 `;
 
 const ChatbotMessages = styled.div`
@@ -57,776 +475,1029 @@ const ChatbotMessages = styled.div`
   display: flex;
   flex-direction: column;
   gap: 12px;
+  scroll-behavior: smooth;
+  background-color: #f0f2f5;
+
+  &::-webkit-scrollbar {
+    width: 8px;
+  }
+  &::-webkit-scrollbar-thumb {
+    background-color: #cbd5e0;
+    border-radius: 4px;
+  }
+  &::-webkit-scrollbar-track {
+    background-color: #f1f5f9;
+  }
 `;
 
 const Message = styled.div`
-  padding: 12px 16px;
-  border-radius: 12px;
   max-width: 85%;
-  word-wrap: break-word;
+  padding: 10px 15px;
+  border-radius: 18px;
+  line-height: 1.4;
+  font-size: 0.9em;
+  animation: ${fadeIn} 0.3s ease-out;
+  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.05);
   white-space: pre-wrap;
-  
+
   ${props => props.type === 'user' ? `
-    background: #3b82f6;
-    color: white;
+    background-color: #e0e7ff;
+    color: #333;
     align-self: flex-end;
-    margin-left: auto;
+    border-bottom-right-radius: 5px;
   ` : `
-    background: white;
-    color: #1f2937;
+    background-color: #ffffff;
+    color: #2d3748;
     align-self: flex-start;
-    border: 1px solid #e5e7eb;
+    border: 1px solid #e2e8f0;
+    border-bottom-left-radius: 5px;
   `}
 `;
 
+const TypingIndicator = styled.div`
+  display: flex;
+  align-self: flex-start;
+  padding: 10px 15px;
+  border-radius: 18px;
+  background: #ffffff;
+  color: #2d3748;
+  margin-top: 5px;
+  animation: ${fadeIn} 0.3s ease-out;
+  box-shadow: 0 1px 2px rgba(0,0,0,0.05);
+
+  span {
+    display: inline-block;
+    width: 7px;
+    height: 7px;
+    background-color: #667eea;
+    border-radius: 50%;
+    margin: 0 2px;
+    animation: ${loadingDots} 1.4s infinite ease-in-out both;
+
+    &:nth-child(1) { animation-delay: -0.32s; }
+    &:nth-child(2) { animation-delay: -0.16s; }
+    &:nth-child(3) { animation-delay: 0s; }
+  }
+`;
+
 const ChatbotInput = styled.div`
-  padding: 16px;
+  padding: 5px 16px 16px;
   border-top: 1px solid #e5e7eb;
-  background: white;
+  background: #ffffff;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
 `;
 
 const InputArea = styled.div`
   display: flex;
-  gap: 8px;
+  gap: 10px;
 `;
 
 const TextArea = styled.textarea`
   flex: 1;
-  padding: 8px 12px;
-  border: 1px solid #d1d5db;
+  padding: 10px 14px;
+  border: 1px solid #cbd5e0;
   border-radius: 8px;
+  font-size: 0.95em;
   resize: none;
-  font-size: 14px;
   outline: none;
-  
   &:focus {
-    border-color: #3b82f6;
+    border-color: #667eea;
+    box-shadow: 0 0 0 3px rgba(102, 126, 234, 0.2);
   }
+  &::placeholder {
+    color: #a0aec0;
+  }
+  min-height: 40px;
+  max-height: 120px;
+  overflow-y: auto;
 `;
 
 const SendButton = styled.button`
-  padding: 8px 16px;
-  background: #3b82f6;
-  color: white;
+  background: ${props => props.disabled ? '#e2e8f0' : '#667eea'};
+  color: ${props => props.disabled ? '#a0aec0' : 'white'};
   border: none;
   border-radius: 8px;
-  font-size: 14px;
+  padding: 10px 18px;
+  font-size: 0.95em;
+  cursor: ${props => props.disabled ? 'not-allowed' : 'pointer'};
+  transition: background 0.2s ease, transform 0.1s ease;
+  &:not(:disabled):hover {
+    background: #5a67d8;
+    transform: translateY(-1px);
+  } 
+`;
+
+const SuggestionsContainer = styled.div`
+  transition: all 0.3s ease;
+  overflow: hidden;
+  max-height: ${props => props.$isExpanded ? '200px' : '43px'};
+  border-radius: 8px;
+  background: ${props => props.$isExpanded ? 'transparent' : '#f0f4ff'};
+  border: 1px solid ${props => props.$isExpanded ? 'transparent' : '#b3c7ff'};
+  margin-bottom: ${props => props.$isExpanded ? '8px' : '0'};
+  box-shadow: ${props => props.$isExpanded ? 'none' : '0 2px 4px rgba(102, 126, 234, 0.1)'};
+`;
+
+const SuggestionsToggle = styled.button`
+  background: ${props => props.$isExpanded ? 'transparent' : 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)'};
+  border: none;
+  color: ${props => props.$isExpanded ? '#64748b' : 'white'};
+  font-size: 0.9em;
   font-weight: 600;
   cursor: pointer;
+  padding: 10px 16px;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  transition: all 0.3s ease;
+  width: 100%;
+  border-radius: 6px;
+  position: relative;
+  overflow: hidden;
   
-  &:disabled {
-    opacity: 0.5;
-    cursor: not-allowed;
+  &:hover {
+    transform: ${props => props.$isExpanded ? 'none' : 'translateY(-1px)'};
+    box-shadow: ${props => props.$isExpanded ? 'none' : '0 4px 12px rgba(102, 126, 234, 0.3)'};
   }
+  
+  &:active {
+    transform: ${props => props.$isExpanded ? 'none' : 'translateY(0)'};
+  }
+  
+  &::before {
+    content: '';
+    position: absolute;
+    top: 0;
+    left: -100%;
+    width: 100%;
+    height: 100%;
+    background: linear-gradient(90deg, transparent, rgba(255, 255, 255, 0.2), transparent);
+    transition: left 0.5s;
+  }
+  
+  &:hover::before {
+    left: 100%;
+  }
+`;
+
+const SuggestionsContent = styled.div`
+  transition: all 0.3s ease;
+  opacity: ${props => props.$isExpanded ? '1' : '0'};
+  transform: ${props => props.$isExpanded ? 'translateY(0)' : 'translateY(-10px)'};
+  max-height: 200px;
+  overflow-y: auto;
+  
+  &::-webkit-scrollbar {
+    width: 6px;
+  }
+  &::-webkit-scrollbar-thumb {
+    background-color: #cbd5e0;
+    border-radius: 3px;
+  }
+  &::-webkit-scrollbar-track {
+    background-color: #f1f5f9;
+  }
+`;
+
+const SuggestionsGrid = styled.div`
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-top: 8px;
+  padding-right: 4px;
 `;
 
 const AutoFillButton = styled.button`
-  margin-top: 8px;
-  width: 100%;
-  padding: 8px 16px;
-  background: linear-gradient(135deg, #10b981, #059669);
-  color: white;
-  border: none;
-  border-radius: 8px;
-  font-size: 12px;
-  font-weight: 600;
-  cursor: pointer;
+  background: ${props => props.disabled ? '#edf2f7' : '#f0f4ff'};
+  color: ${props => props.disabled ? '#a0aec0' : '#4c51bf'};
+  border: 1px solid ${props => props.disabled ? '#e2e8f0' : '#b3c7ff'};
+  border-radius: 20px;
+  padding: 8px 12px;
+  font-size: 0.8em;
+  cursor: ${props => props.disabled ? 'not-allowed' : 'pointer'};
+  transition: all 0.2s ease;
+  white-space: nowrap;
   display: flex;
   align-items: center;
-  justify-content: center;
-  gap: 6px;
-  
-  &:disabled {
-    opacity: 0.5;
-    cursor: not-allowed;
+  gap: 4px;
+
+  &:not(:disabled):hover {
+    background: #e0e9ff;
+    border-color: #92aeff;
   }
 `;
 
-const QuickQuestionButton = styled.button`
-  margin: 4px;
-  padding: 6px 12px;
-  background: #f3f4f6;
-  color: #374151;
-  border: 1px solid #d1d5db;
-  border-radius: 16px;
-  font-size: 12px;
+
+
+const SectionTitle = styled.h2`
+  font-size: 1.5em;
+  color: #2d3748;
+  margin-bottom: 20px;
+  border-bottom: 2px solid #edf2f7;
+  padding-bottom: 10px;
+`;
+
+const FormField = styled.div`
+  margin-bottom: 18px;
+
+  label {
+    display: block;
+    font-size: 0.95em;
+    color: #4a5568;
+    margin-bottom: 6px;
+    font-weight: 600;
+  }
+
+  input[type="text"],
+  input[type="number"],
+  textarea {
+    width: 100%;
+    padding: 10px 12px;
+    border: 1px solid #cbd5e0;
+    border-radius: 6px;
+    font-size: 1em;
+    color: #2d3748;
+    background-color: #ffffff;
+    box-shadow: inset 0 1px 2px rgba(0,0,0,0.04);
+    transition: border-color 0.2s, box-shadow 0.2s;
+
+    &:focus {
+      outline: none;
+      border-color: #667eea;
+      box-shadow: 0 0 0 3px rgba(102, 126, 234, 0.2);
+    }
+
+    &:disabled {
+      background-color: #f8fafc;
+      color: #a0aec0;
+      cursor: not-allowed;
+    }
+  }
+
+  textarea {
+    min-height: 80px;
+    resize: vertical;
+  }
+`;
+
+const ButtonGroup = styled.div`
+  display: flex;
+  gap: 12px;
+  margin-top: 24px;
+  justify-content: flex-end;
+`;
+
+const FormActionButton = styled.button`
+  padding: 10px 20px;
+  border-radius: 8px;
+  font-size: 0.95em;
+  font-weight: 600;
   cursor: pointer;
   transition: all 0.2s ease;
-  
-  &:hover {
-    background: #e5e7eb;
-    border-color: #9ca3af;
-  }
+
+  ${props => props.$primary ? `
+    background-color: #667eea;
+    color: white;
+    border: 1px solid #667eea;
+    &:hover {
+      background-color: #5a67d8;
+      border-color: #5a67d8;
+      transform: translateY(-1px);
+    }
+  ` : `
+    background-color: #edf2f7;
+    color: #4a5568;
+    border: 1px solid #e2e8f0;
+    &:hover {
+      background-color: #e2e8f0;
+      transform: translateY(-1px);
+    }
+  `}
 `;
 
-const EnhancedModalChatbot = ({ 
-  isOpen, 
-  onClose, 
-  title, 
-  children, 
+// ==========================================================
+// Main Component: EnhancedModalChatbot
+// ==========================================================
+
+const EnhancedModalChatbot = ({
+  isOpen,
+  onClose,
   fields = [],
+  formData = {},
   onFieldUpdate,
   onComplete,
-  aiAssistant = true 
+  aiAssistant = true,
+  title = "AI 채용공고 어시스턴트"
 }) => {
   const [messages, setMessages] = useState([]);
   const [inputValue, setInputValue] = useState('');
   const [isLoading, setIsLoading] = useState(false);
   const [currentField, setCurrentField] = useState(null);
   const [autoFillSuggestions, setAutoFillSuggestions] = useState([]);
-  const [quickQuestions, setQuickQuestions] = useState([]);
+  const [isSuggestionsExpanded, setIsSuggestionsExpanded] = useState(false);
+  const [aiService] = useState(() => new AIChatbotService());
+  const [selectedItems, setSelectedItems] = useState([]);
+  const [currentItems, setCurrentItems] = useState([]);
   const messagesEndRef = useRef(null);
   const inputRef = useRef(null);
+  const sendMessageRef = useRef(null);
+  const fieldsRef = useRef(fields);
+  const inputUpdateTimeout = useRef(null);
 
-  // 모달이 열릴 때 AI 어시스턴트 시작
+  
+
+
+  // fields ref 업데이트
+  useEffect(() => {
+    fieldsRef.current = fields;
+  }, [fields]);
+
+  // 현재 필드가 변경될 때마다 추천리스트 업데이트
+  useEffect(() => {
+    if (currentField) {
+      console.log('[EnhancedModalChatbot] 현재 필드 변경됨:', currentField.key);
+      const suggestions = getFieldSuggestions(currentField.key, formData);
+      setAutoFillSuggestions(suggestions);
+      console.log('[EnhancedModalChatbot] 추천리스트 업데이트:', suggestions);
+    } else {
+      // 모든 필드가 완료되면 추천리스트 숨기기
+      console.log('[EnhancedModalChatbot] 모든 필드 완료 - 추천리스트 숨김');
+      setAutoFillSuggestions([]);
+      setIsSuggestionsExpanded(false);
+    }
+  }, [currentField, formData]);
+
+  // 모달 열릴 때 AI 어시스턴트 시작
   useEffect(() => {
     if (isOpen && aiAssistant) {
-      startAIAssistant();
-    }
-  }, [isOpen, aiAssistant]);
+      // startAIAssistant 함수를 직접 호출하지 않고 내부 로직을 실행
+      const initializeAI = async () => {
+        setIsLoading(true);
+        
+        try {
+          // AI 세션 시작
+          await aiService.startSession('job_posting', fieldsRef.current);
+          
+          if (!fieldsRef.current || fieldsRef.current.length === 0) {
+            setMessages([{
+              type: 'bot',
+              content: "안녕하세요! 설정된 필드가 없습니다. 채용공고를 작성할 수 없습니다.",
+              timestamp: new Date(),
+              id: `bot-${Date.now()}-${Math.random().toString(36).substr(2, 9)}-no-fields`
+            }]);
+            setIsLoading(false);
+            return;
+          }
 
-  // 메시지 스크롤 자동화
+          const firstField = fieldsRef.current[0];
+          setCurrentField(firstField);
+          
+          const welcomeMessage = {
+            type: 'bot',
+            content: `안녕하세요! 👋\n\n채용공고 작성을 도와드리겠습니다.\n\n먼저 **${firstField.label}**에 대해 알려주세요.`,
+            timestamp: new Date(),
+            id: `bot-${Date.now()}-${Math.random().toString(36).substr(2, 9)}-initial`
+          };
+          
+          setMessages([welcomeMessage]);
+          setAutoFillSuggestions(getFieldSuggestions(firstField.key, formData));
+          setIsSuggestionsExpanded(true);
+          
+        } catch (error) {
+          console.error('AI 어시스턴트 시작 오류:', error);
+          setMessages([{
+            type: 'bot',
+            content: "AI 서비스에 연결할 수 없습니다. 오프라인 모드로 전환됩니다.",
+            timestamp: new Date(),
+            id: `bot-${Date.now()}-${Math.random().toString(36).substr(2, 9)}-error`
+          }]);
+        }
+        
+        setIsLoading(false);
+        if (inputRef.current) {
+          inputRef.current.focus();
+        }
+      };
+      
+      initializeAI();
+    }
+  }, [isOpen, aiAssistant, aiService]);
+
+  // 메시지 업데이트 시 스크롤
   useEffect(() => {
     messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
   }, [messages]);
 
-  const startAIAssistant = async () => {
-    if (fields.length === 0) return;
-    
-    const firstField = fields[0];
-    setCurrentField(firstField);
-    
-    const welcomeMessage = {
-      type: 'bot',
-      content: `안녕하세요! ${title} 작성을 도와드리겠습니다. 🤖\n\n먼저 ${firstField.label}에 대해 알려주세요.`,
-      timestamp: new Date()
-    };
-    
-    setMessages([welcomeMessage]);
-    
-    // 첫 번째 필드에 대한 빠른 질문들 생성
-    generateQuickQuestions(firstField);
-  };
+  // 입력창 포커스
+  useEffect(() => {
+    if (!isLoading && inputRef.current && isOpen) {
+      inputRef.current.focus();
+    }
+  }, [isLoading, isOpen]);
 
-  const generateQuickQuestions = (field) => {
-    const questionsMap = {
-      department: [
-        "개발팀은 어떤 업무를 하나요?",
-        "마케팅팀은 어떤 역할인가요?",
-        "영업팀의 주요 업무는?",
-        "디자인팀은 어떤 일을 하나요?"
-      ],
-      headcount: [
-        "1명 채용하면 충분한가요?",
-        "팀 규모는 어떻게 되나요?",
-        "신입/경력 구분해서 채용하나요?",
-        "계약직/정규직 중 어떤가요?"
-      ],
-      workType: [
-        "웹 개발은 어떤 기술을 사용하나요?",
-        "앱 개발은 iOS/Android 둘 다인가요?",
-        "디자인은 UI/UX 모두인가요?",
-        "마케팅은 온라인/오프라인 모두인가요?"
-      ],
-      workHours: [
-        "유연근무제는 어떻게 운영되나요?",
-        "재택근무 가능한가요?",
-        "야근이 많은 편인가요?",
-        "주말 근무가 있나요?"
-      ],
-      location: [
-        "원격근무는 얼마나 가능한가요?",
-        "출장이 많은 편인가요?",
-        "해외 지사 근무 가능한가요?",
-        "지방 근무는 어떤가요?"
-      ],
-      salary: [
-        "연봉 협의는 언제 하나요?",
-        "성과급은 어떻게 지급되나요?",
-        "인센티브 제도가 있나요?",
-        "연봉 인상은 언제 하나요?"
-      ],
-      jobTitle: [
-        "공고 제목을 어떻게 작성해야 할까요?",
-        "어떤 제목이 매력적일까요?",
-        "검색에 잘 걸리는 제목은?",
-        "회사명을 포함해야 하나요?"
-      ],
-      jobContent: [
-        "공고 내용을 어떻게 작성해야 할까요?",
-        "어떤 정보를 포함해야 하나요?",
-        "회사 소개는 어떻게 쓸까요?",
-        "업무 내용은 구체적으로 써야 하나요?"
-      ]
-    };
+  // AI 응답 처리 함수
+  const handleAIResponse = useCallback(async (userInput) => {
+    if (!userInput.trim()) return;
     
-    const questions = questionsMap[field.key] || [
-      "이 항목에 대해 궁금한 점이 있으신가요?",
-      "더 자세한 설명이 필요하신가요?",
-      "예시를 들어 설명해드릴까요?"
-    ];
-    
-    setQuickQuestions(questions);
-  };
-
-  const sendMessage = async () => {
-    if (!inputValue.trim() || isLoading) return;
-
+    // 사용자 메시지를 먼저 추가하여 즉시 UI에 반영
     const userMessage = {
       type: 'user',
-      content: inputValue,
-      timestamp: new Date()
+      content: userInput,
+      timestamp: new Date(),
+      id: `user-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`
     };
-
+    
     setMessages(prev => [...prev, userMessage]);
     setInputValue('');
     setIsLoading(true);
-
+    
     try {
-      // AI 응답 시뮬레이션 (실제로는 API 호출)
-      const aiResponse = await simulateAIResponse(inputValue, currentField, fieldHistory[currentField.key]);
-
-      const botMessage = {
+      const response = await aiService.sendMessage(userInput, currentField, {
+        formData,
+        messages: messages.slice(-5) // 최근 5개 메시지만 컨텍스트로 전송
+      });
+      
+      console.log('[EnhancedModalChatbot] AI 응답:', response);
+      
+      // AI 응답 메시지 추가
+      const aiMessage = {
         type: 'bot',
-        content: aiResponse.message,
-        timestamp: new Date()
+        content: response.message,
+        timestamp: new Date(),
+        id: `bot-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`,
+        responseType: response.response_type || 'conversation',
+        selectableItems: response.selectable_items || [],
+        suggestions: response.suggestions || []
       };
-
-      setMessages(prev => [...prev, botMessage]);
-
-      // 자동 입력 제안이 있는 경우
-      if (aiResponse.suggestions && aiResponse.suggestions.length > 0) {
-        setAutoFillSuggestions(aiResponse.suggestions);
-      }
-
-      // 답변 누적 (필드별로)
-      setFieldHistory(prev => ({
-        ...prev,
-        [currentField.key]: [...(prev[currentField.key] || []), inputValue]
-      }));
-
-      // 추가 정보가 필요하면 currentField 유지, 아니면 다음 단계로 이동
-      if (aiResponse.needMoreDetail) {
-        // currentField 유지 (추가 답변 대기)
-        setIsLoading(false);
-        return;
-      } else {
-        // 값 저장
-        onFieldUpdate?.(currentField.key, aiResponse.value);
-        setAutoFillSuggestions([]);
+      
+      setMessages(prev => [...prev, aiMessage]);
+      
+      // 필드 업데이트가 있는 경우 처리
+      if (response.field && response.value && onFieldUpdate) {
+        console.log('[EnhancedModalChatbot] 필드 업데이트 실행:', response.field, response.value);
+        onFieldUpdate(response.field, response.value);
+        
         // 다음 필드로 이동
-        const currentIndex = fields.findIndex(f => f.key === currentField.key);
-        if (currentIndex < fields.length - 1) {
-          const nextField = fields[currentIndex + 1];
+        const currentFieldIndex = fields.findIndex(f => f.key === response.field);
+        if (currentFieldIndex !== -1 && currentFieldIndex < fields.length - 1) {
+          const nextField = fields[currentFieldIndex + 1];
           setCurrentField(nextField);
-          generateQuickQuestions(nextField);
+          // 다음 필드에 대한 추천 업데이트
+          setAutoFillSuggestions(getFieldSuggestions(nextField.key, formData));
         } else {
-          // 마지막 필드면 완료
-          onComplete?.({});
+          // 모든 필드가 완료되면 currentField를 null로 설정
+          setCurrentField(null);
+          setAutoFillSuggestions([]);
+          setIsSuggestionsExpanded(false);
         }
-        setIsLoading(false);
+        
+        console.log('[EnhancedModalChatbot] 필드 업데이트 완료:', response.field, response.value);
+      } else {
+        // 필드 업데이트가 없는 경우에도 사용자 입력을 현재 필드에 반영
+        if (currentField && onFieldUpdate) {
+          console.log('[EnhancedModalChatbot] 사용자 입력을 현재 필드에 반영:', currentField.key, userInput);
+          onFieldUpdate(currentField.key, userInput);
+          
+          // 사용자 입력 후 다음 필드로 자동 이동
+          const currentFieldIndex = fields.findIndex(f => f.key === currentField.key);
+          if (currentFieldIndex !== -1 && currentFieldIndex < fields.length - 1) {
+            const nextField = fields[currentFieldIndex + 1];
+            setCurrentField(nextField);
+            // 다음 필드에 대한 추천 업데이트
+            setAutoFillSuggestions(getFieldSuggestions(nextField.key, formData));
+          } else {
+            // 모든 필드가 완료되면 currentField를 null로 설정
+            setCurrentField(null);
+            setAutoFillSuggestions([]);
+            setIsSuggestionsExpanded(false);
+          }
+        }
       }
-    } catch (e) {
+      
+      // 경력 관련 입력 감지 및 자동 매핑
+      if (!response.field && !response.value && currentField && onFieldUpdate) {
+        const experienceKeywords = ['경력', '신입', '경험', '년', '무관'];
+        const hasExperienceKeyword = experienceKeywords.some(keyword => 
+          userInput.includes(keyword)
+        );
+        
+        if (hasExperienceKeyword) {
+          // 경력 필드가 있는지 확인
+          const experienceField = fields.find(f => f.key === 'experience');
+          if (experienceField) {
+            console.log('[EnhancedModalChatbot] 경력 관련 입력 감지, experience 필드로 매핑:', userInput);
+            onFieldUpdate('experience', userInput);
+            
+            // 다음 필드로 이동
+            const experienceFieldIndex = fields.findIndex(f => f.key === 'experience');
+            if (experienceFieldIndex !== -1 && experienceFieldIndex < fields.length - 1) {
+              const nextField = fields[experienceFieldIndex + 1];
+              setCurrentField(nextField);
+              setAutoFillSuggestions(getFieldSuggestions(nextField.key, formData));
+            } else {
+              setCurrentField(null);
+              setAutoFillSuggestions([]);
+              setIsSuggestionsExpanded(false);
+            }
+          }
+        }
+      }
+      
+      // 강제로 필드 업데이트 확인
+      if (currentField && onFieldUpdate) {
+        setTimeout(() => {
+          console.log('[EnhancedModalChatbot] 강제 필드 업데이트 확인:', currentField.key, userInput);
+          onFieldUpdate(currentField.key, userInput);
+        }, 100);
+      }
+      
+      // 선택 가능한 항목이 있는 경우 처리
+      if (response.response_type === 'selection' && response.selectable_items && response.selectable_items.length > 0) {
+        setCurrentItems(response.selectable_items.map((item, index) => ({
+          id: `item-${Date.now()}-${index}`,
+          text: item.text || item,
+          value: item.value || item
+        })));
+        setSelectedItems([]);
+      } else {
+        // 대화형 응답인 경우 선택 항목 초기화
+        setCurrentItems([]);
+        setSelectedItems([]);
+      }
+      
+    } catch (error) {
+      console.error('[EnhancedModalChatbot] AI 응답 처리 오류:', error);
+      
+      // 오류 발생 시에도 사용자 입력을 현재 필드에 반영
+      if (currentField && onFieldUpdate) {
+        console.log('[EnhancedModalChatbot] 오류 발생 시에도 필드 업데이트:', currentField.key, userInput);
+        onFieldUpdate(currentField.key, userInput);
+      }
+      
+      const errorMessage = {
+        type: 'bot',
+        content: '죄송합니다. 일시적인 오류가 발생했습니다. 다시 시도해주세요.',
+        timestamp: new Date(),
+        id: `bot-error-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`,
+        responseType: 'conversation'
+      };
+      
+      setMessages(prev => [...prev, errorMessage]);
+    } finally {
       setIsLoading(false);
     }
-  };
+  }, [aiService, currentField, formData, messages, fields, onFieldUpdate]);
 
-  // 필드별 답변 히스토리
-  const [fieldHistory, setFieldHistory] = useState({});
+  // sendMessage 함수를 ref에 저장
+  sendMessageRef.current = handleAIResponse;
 
-  // simulateAIResponse 개선: needMoreDetail 플래그 추가
-  const simulateAIResponse = async (userInput, field, history = []) => {
-    await new Promise(resolve => setTimeout(resolve, 800));
-    const lowerInput = userInput.toLowerCase();
-
-    // 예시: department에서 추가 정보가 필요하면 needMoreDetail true 반환
-    if (field.key === 'department') {
-      if (!['프론트엔드', '백엔드', '풀스택', '모바일', '기획', '디자인', '마케팅', '영업'].some(k => lowerInput.includes(k))) {
-        // 추가 정보 필요
-        return {
-          message: generateDepartmentResponse(lowerInput),
-          value: history.concat([userInput]).join(' '),
-          suggestions: generateDepartmentSuggestions(lowerInput),
-          needMoreDetail: true
-        };
-      } else {
-        // 충분한 정보
-        return {
-          message: `좋아요! ${userInput} 부서로 등록하겠습니다. 이제 채용 인원에 대해 알려주세요.`,
-          value: userInput,
-          suggestions: [],
-          needMoreDetail: false
-        };
-      }
-    }
-    // 나머지 필드도 필요시 비슷하게 적용 가능
-    // 기본 응답
-    const responses = {
-      headcount: {
-        message: generateHeadcountResponse(lowerInput),
-        value: extractHeadcountValue(userInput),
-        suggestions: generateHeadcountSuggestions(lowerInput),
-        needMoreDetail: false
-      },
-      mainDuties: {
-        message: generateMainDutiesResponse(lowerInput),
-        value: userInput,
-        suggestions: generateMainDutiesSuggestions(lowerInput),
-        needMoreDetail: false
-      },
-      workHours: {
-        message: generateWorkHoursResponse(lowerInput),
-        value: extractWorkHoursValue(userInput),
-        suggestions: generateWorkHoursSuggestions(lowerInput),
-        needMoreDetail: false
-      },
-      locationCity: {
-        message: generateLocationResponse(lowerInput),
-        value: extractLocationValue(userInput),
-        suggestions: generateLocationSuggestions(lowerInput),
-        needMoreDetail: false
-      },
-      salary: {
-        message: generateSalaryResponse(lowerInput),
-        value: extractSalaryValue(userInput),
-        suggestions: generateSalarySuggestions(lowerInput),
-        needMoreDetail: false
-      },
-      deadline: {
-        message: generateDeadlineResponse(lowerInput),
-        value: extractDeadlineValue(userInput),
-        suggestions: generateDeadlineSuggestions(lowerInput),
-        needMoreDetail: false
-      },
-      contactEmail: {
-        message: generateEmailResponse(lowerInput),
-        value: extractEmailValue(userInput),
-        suggestions: generateEmailSuggestions(lowerInput),
-        needMoreDetail: false
-      },
-      jobTitle: {
-        message: generateJobTitleResponse(lowerInput),
-        value: userInput,
-        suggestions: [],
-        needMoreDetail: false
-      },
-      jobContent: {
-        message: generateJobContentResponse(lowerInput),
-        value: userInput,
-        suggestions: [],
-        needMoreDetail: false
-      }
-    };
-    return responses[field.key] || {
-      message: generateGenericResponse(lowerInput, field),
-      value: userInput,
-      suggestions: [],
-      needMoreDetail: false
-    };
-  };
-
-  // 부서 관련 응답 생성
-  const generateDepartmentResponse = (input) => {
-    if (input.includes('개발') || input.includes('dev')) {
-      return '개발팀이시군요! 🚀\n\n개발팀은 보통 프론트엔드, 백엔드, 풀스택으로 나뉘는데요. 어떤 개발 분야를 찾고 계신가요?\n\n• 프론트엔드: React, Vue.js, Angular\n• 백엔드: Java, Python, Node.js\n• 풀스택: 전체 개발 가능\n• 모바일: iOS, Android\n\n어떤 기술 스택을 사용하실 예정인가요?';
-    } else if (input.includes('마케팅') || input.includes('marketing')) {
-      return '마케팅팀이시군요! 📢\n\n마케팅팀은 다양한 역할이 있어요:\n\n• 디지털 마케팅: SNS, 광고, SEO\n• 브랜드 마케팅: 브랜드 전략, 콘텐츠\n• 성장 마케팅: 데이터 분석, A/B 테스트\n• B2B 마케팅: 기업 대상 마케팅\n\n어떤 마케팅 분야를 찾고 계신가요?';
-    } else if (input.includes('디자인') || input.includes('design')) {
-      return '디자인팀이시군요! 🎨\n\n디자인팀도 여러 분야가 있어요:\n\n• UI/UX 디자인: 사용자 경험 설계\n• 그래픽 디자인: 브랜딩, 포스터\n• 제품 디자인: 하드웨어 제품\n• 웹 디자인: 웹사이트, 앱\n\n어떤 디자인 분야를 찾고 계신가요?';
-    } else if (input.includes('영업') || input.includes('sales')) {
-      return '영업팀이시군요! 💼\n\n영업팀은 회사 수익에 직접적인 영향을 주는 중요한 팀이에요:\n\n• 내부 영업: 사무실에서 전화/이메일\n• 외부 영업: 고객사 방문\n• B2B 영업: 기업 대상\n• B2C 영업: 개인 대상\n\n어떤 영업 형태를 찾고 계신가요?';
-    } else {
-      return `'${input}' 부서를 찾고 계시는군요! 👍\n\n이 부서에서 어떤 역할을 담당하게 될까요? 구체적인 업무 내용을 알려주시면 더 정확한 채용공고를 작성할 수 있어요.`;
-    }
-  };
-
-  // 채용 인원 관련 응답 생성
-  const generateHeadcountResponse = (input) => {
-    if (input.includes('1명') || input.includes('한 명')) {
-      return '1명 채용이시군요! 👤\n\n1명 채용은 보통:\n\n• 특정 기술을 가진 전문가\n• 팀에 부족한 역할 보충\n• 새로운 프로젝트 담당자\n\n어떤 경력 수준을 찾고 계신가요? (신입/경력)';
-    } else if (input.includes('2명') || input.includes('두 명')) {
-      return '2명 채용이시군요! 👥\n\n2명 채용은 보통:\n\n• 팀 확장을 위한 인력\n• 선후배 관계로 구성\n• 서로 다른 전문 분야\n\n어떤 조합으로 구성하고 싶으신가요?';
-    } else if (input.includes('3명') || input.includes('세 명')) {
-      return '3명 채용이시군요! 👥👤\n\n3명은 작은 팀을 구성할 수 있는 규모예요:\n\n• 팀 리더 1명 + 실무자 2명\n• 각각 다른 전문 분야\n• 프로젝트별 담당\n\n어떤 역할 분담을 생각하고 계신가요?';
-    } else {
-      return `'${input}'명 채용이시군요! 👍\n\n이 정도 규모면 팀을 구성하거나 프로젝트를 담당할 수 있을 것 같아요. 어떤 경력 수준을 찾고 계신가요?`;
-    }
-  };
-
-  // 업무 내용 관련 응답 생성
-  const generateMainDutiesResponse = (input) => {
-    if (input.includes('개발') || input.includes('코딩') || input.includes('프로그래밍')) {
-      return '개발 업무를 담당하게 되시는군요! 💻\n\n개발 업무는 보통:\n\n• 웹/앱 개발\n• 데이터베이스 설계\n• API 개발\n• 테스트 및 디버깅\n\n어떤 기술 스택을 사용하실 예정인가요?';
-    } else if (input.includes('디자인') || input.includes('UI') || input.includes('UX')) {
-      return '디자인 업무를 담당하게 되시는군요! 🎨\n\n디자인 업무는 보통:\n\n• UI/UX 설계\n• 프로토타입 제작\n• 사용자 리서치\n• 디자인 시스템 구축\n\n어떤 디자인 도구를 사용하실 예정인가요?';
-    } else if (input.includes('마케팅') || input.includes('광고') || input.includes('홍보')) {
-      return '마케팅 업무를 담당하게 되시는군요! 📢\n\n마케팅 업무는 보통:\n\n• 캠페인 기획 및 실행\n• 콘텐츠 제작\n• 데이터 분석\n• 고객 관리\n\n어떤 마케팅 채널을 주로 사용하실 예정인가요?';
-    } else {
-      return `'${input}' 업무를 담당하게 되시는군요! 👍\n\n이 업무에서 가장 중요한 역량이나 경험이 있다면 알려주세요. 채용공고에 반영해드릴게요.`;
-    }
-  };
-
-  // 근무 시간 관련 응답 생성
-  const generateWorkHoursResponse = (input) => {
-    if (input.includes('유연') || input.includes('플렉스')) {
-      return '유연근무제를 운영하시는군요! ⏰\n\n유연근무제는 좋은 선택이에요:\n\n• 업무 효율성 향상\n• 직원 만족도 증가\n• 일과 삶의 균형\n\n핵심 근무 시간은 어떻게 되나요? (예: 10:00-16:00)';
-    } else if (input.includes('재택') || input.includes('원격') || input.includes('홈오피스')) {
-      return '재택근무를 허용하시는군요! 🏠\n\n재택근무는 요즘 트렌드예요:\n\n• 업무 집중도 향상\n• 출퇴근 시간 절약\n• 코로나 대응\n\n재택근무 비율은 어떻게 되나요? (예: 주 2-3일)';
-    } else if (input.includes('야근') || input.includes('오버타임')) {
-      return '야근이 있는 환경이시군요! 🌙\n\n야근에 대해 솔직하게 말씀해주셔서 좋아요:\n\n• 야근 수당 지급\n• 대체 휴가 제공\n• 야근 최소화 노력\n\n야근은 보통 어떤 상황에서 발생하나요?';
-    } else {
-      return `'${input}' 근무 시간이시군요! 👍\n\n이 근무 시간에 대해 궁금한 점이 있으시면 언제든 물어보세요. 퇴근 시간이나 점심 시간은 어떻게 되나요?`;
-    }
-  };
-
-  // 위치 관련 응답 생성
-  const generateLocationResponse = (input) => {
-    if (input.includes('서울') || input.includes('강남') || input.includes('홍대')) {
-      return '서울에서 근무하시는군요! 🏢\n\n서울은 다양한 장점이 있어요:\n\n• 대중교통 편리\n• 다양한 기업 문화\n• 네트워킹 기회\n\n구체적으로 어느 지역인가요? (예: 강남, 홍대, 여의도)';
-    } else if (input.includes('부산') || input.includes('대구') || input.includes('인천')) {
-      return '지방에서 근무하시는군요! 🏙️\n\n지방 근무의 장점:\n\n• 생활비 절약\n• 여유로운 생활\n• 지역 특화 업무\n\n구체적으로 어느 지역인가요?';
-    } else if (input.includes('원격') || input.includes('재택') || input.includes('홈오피스')) {
-      return '원격근무를 허용하시는군요! 🌐\n\n원격근무는 요즘 필수예요:\n\n• 지역 제약 없음\n• 다양한 인재 확보\n• 업무 효율성 향상\n\n원격근무 비율은 어떻게 되나요?';
-    } else {
-      return `'${input}'에서 근무하시는군요! 👍\n\n이 지역에서 근무할 때의 장점이나 특별한 점이 있다면 알려주세요.`;
-    }
-  };
-
-  // 급여 관련 응답 생성
-  const generateSalaryResponse = (input) => {
-    if (input.includes('협의') || input.includes('면접')) {
-      return '급여는 협의로 결정하시는군요! 💰\n\n협의 방식은 좋은 선택이에요:\n\n• 경력과 역량에 맞춤\n• 시장 수준 고려\n• 성과 연동 가능\n\n어떤 기준으로 협의하실 예정인가요?';
-    } else if (input.includes('만원') || input.includes('천만')) {
-      return '구체적인 급여를 제시하시는군요! 💰\n\n투명한 급여 제시는 좋아요:\n\n• 지원자들이 명확히 파악\n• 적합한 인재 유치\n• 회사 신뢰도 향상\n\n성과급이나 인센티브는 별도인가요?';
-    } else {
-      return `'${input}' 급여 조건이시군요! 👍\n\n이 급여에 대해 궁금한 점이 있으시면 언제든 물어보세요. 성과급이나 복리후생은 어떻게 되나요?`;
-    }
-  };
-
-  // 마감일 관련 응답 생성
-  const generateDeadlineResponse = (input) => {
-    if (input.includes('채용') || input.includes('시')) {
-      return '채용 시 마감이시군요! ⏰\n\n채용 시 마감은 유연한 방식이에요:\n\n• 적합한 인재 찾을 때까지\n• 시급한 포지션\n• 계속적인 채용\n\n대략적인 기간은 어떻게 되나요?';
-    } else if (input.includes('년') || input.includes('월') || input.includes('일')) {
-      return '구체적인 마감일을 정하시는군요! 📅\n\n명확한 마감일은 좋아요:\n\n• 지원자들이 계획 수립\n• 채용 일정 관리\n• 효율적인 채용 진행\n\n마감일 이후에도 채용이 계속되나요?';
-    } else {
-      return `'${input}' 마감일이시군요! 👍\n\n이 마감일에 대해 궁금한 점이 있으시면 언제든 물어보세요.`;
-    }
-  };
-
-  // 이메일 관련 응답 생성
-  const generateEmailResponse = (input) => {
-    if (input.includes('@')) {
-      return '이메일을 입력해주셨군요! 📧\n\n이메일은 채용 관련 소통에 사용될 예정이에요:\n\n• 지원자 문의 응답\n• 면접 일정 안내\n• 최종 결과 통보\n\n이메일로 받을 수 있는 문의 유형을 알려드릴까요?';
-    } else {
-      return '이메일 주소를 입력해주세요! 📧\n\n이메일은 채용 과정에서 중요한 소통 수단이에요. 회사 이메일이나 담당자 이메일을 입력해주세요.';
-    }
-  };
-
-  // 공고 제목 관련 응답 생성
-  const generateJobTitleResponse = (input) => {
-    if (input.includes('추천') || input.includes('제목') || input.includes('어떻게')) {
-      return '채용공고 제목을 추천해드릴게요! 📝\n\n좋은 제목의 핵심 요소:\n\n• 명확한 포지션 (예: "React 개발자", "UI/UX 디자이너")\n• 회사명 포함 (예: "ABC기업 React 개발자 모집")\n• 매력적인 키워드 (예: "성장하는", "혁신적인")\n\n어떤 부서에서 어떤 역할을 찾고 계신가요? 구체적으로 알려주시면 맞춤형 제목을 추천해드릴게요!';
-    } else if (input.includes('개발') || input.includes('프로그래머') || input.includes('엔지니어')) {
-      return '개발자 채용공고 제목을 추천해드릴게요! 💻\n\n추천 제목들:\n\n• "[회사명] React 개발자 모집"\n• "성장하는 스타트업에서 함께할 개발자"\n• "혁신적인 서비스를 만들어갈 개발자"\n• "풀스택 개발자 (React + Node.js)"\n\n어떤 기술 스택을 사용하실 예정인가요?';
-    } else if (input.includes('마케팅') || input.includes('홍보')) {
-      return '마케팅 담당자 채용공고 제목을 추천해드릴게요! 📢\n\n추천 제목들:\n\n• "[회사명] 디지털 마케터 모집"\n• "브랜드 성장을 이끌 마케터"\n• "데이터 기반 마케팅 전문가"\n• "콘텐츠 마케터 (SNS 운영)"\n\n어떤 마케팅 분야를 찾고 계신가요?';
-    } else if (input.includes('디자인') || input.includes('design')) {
-      return '디자이너 채용공고 제목을 추천해드릴게요! 🎨\n\n추천 제목들:\n\n• "[회사명] UI/UX 디자이너 모집"\n• "사용자 경험을 설계할 디자이너"\n• "브랜드 아이덴티티를 만드는 디자이너"\n• "웹/앱 디자이너 (Figma, Sketch)"\n\n어떤 디자인 분야를 찾고 계신가요?';
-    } else if (input.includes('신입') || input.includes('주니어')) {
-      return '신입/주니어 채용공고 제목을 추천해드릴게요! 🌱\n\n추천 제목들:\n\n• "[회사명] 신입 개발자 모집 (대졸 신입)"\n• "함께 성장할 주니어 개발자"\n• "신입 디자이너 모집 (포트폴리오 필수)"\n• "주니어 마케터 모집 (성장 의지 우대)"\n\n어떤 분야의 신입/주니어를 찾고 계신가요?';
-    } else if (input.includes('풀스택') || input.includes('fullstack')) {
-      return '풀스택 개발자 채용공고 제목을 추천해드릴게요! 🔧\n\n추천 제목들:\n\n• "[회사명] 풀스택 개발자 모집 (React + Node.js)"\n• "프론트엔드/백엔드 모두 가능한 개발자"\n• "풀스택 개발자 (Vue.js + Python)"\n• "전체 개발 가능한 개발자 모집"\n\n어떤 기술 스택을 사용하실 예정인가요?';
-    } else {
-      return `'${input}' 관련 채용공고 제목을 추천해드릴게요! 📝\n\n좋은 제목의 특징:\n\n• 명확하고 구체적\n• 회사 브랜딩 반영\n• 지원자에게 매력적\n• 검색 최적화\n\n더 구체적인 정보를 알려주시면 맞춤형 제목을 추천해드릴게요!`;
-    }
-  };
-
-  // 공고 내용 관련 응답 생성
-  const generateJobContentResponse = (input) => {
-    if (input.includes('추천') || input.includes('내용') || input.includes('어떻게')) {
-      return '채용공고 내용을 추천해드릴게요! 📄\n\n좋은 공고 내용의 구조:\n\n1. **회사 소개** - 회사의 비전과 문화\n2. **업무 내용** - 구체적인 역할과 책임\n3. **자격 요건** - 필수/우대 사항\n4. **근무 조건** - 근무시간, 위치, 급여\n5. **복리후생** - 보험, 휴가, 교육 등\n\n어떤 정보를 먼저 작성하고 싶으신가요? 회사 소개부터 시작할까요?';
-    } else if (input.includes('회사') || input.includes('소개')) {
-      return '회사 소개 부분을 작성해드릴게요! 🏢\n\n추천 템플릿:\n\n"[회사명]은 [핵심 가치/비전]을 추구하는 [업종] 기업입니다.\n\n우리는 [주요 성과/특징]을 통해 [목표]를 달성하고 있으며, [회사 문화/환경]을 중시합니다.\n\n이번 채용을 통해 [기대하는 역할]을 담당할 인재를 찾고 있습니다."\n\n회사명과 주요 특징을 알려주시면 맞춤형 소개를 작성해드릴게요!';
-    } else if (input.includes('업무') || input.includes('일')) {
-      return '업무 내용 부분을 작성해드릴게요! 💼\n\n추천 템플릿:\n\n"주요 업무:\n• [구체적인 업무 1]\n• [구체적인 업무 2]\n• [구체적인 업무 3]\n\n담당 프로젝트:\n• [프로젝트명/서비스명] 개발 및 운영\n• [관련 기술/도구] 활용\n• 팀 협업 및 커뮤니케이션"\n\n어떤 업무를 담당하게 될까요? 구체적으로 알려주세요!';
-    } else if (input.includes('자격') || input.includes('요건')) {
-      return '자격 요건 부분을 작성해드릴게요! ✅\n\n추천 템플릿:\n\n"필수 요건:\n• [학력/경력] 이상\n• [필수 기술/자격] 보유\n• [관련 경험] 경험자\n\n우대 사항:\n• [추가 기술/자격] 보유자\n• [관련 프로젝트] 경험자\n• [언어/자격증] 보유자"\n\n어떤 자격 요건을 설정하고 싶으신가요?';
-    } else if (input.includes('복리후생') || input.includes('복리')) {
-      return '복리후생 부분을 작성해드릴게요! 🎁\n\n추천 템플릿:\n\n"복리후생:\n• 4대보험 및 퇴직연금\n• 연차휴가 및 반차제도\n• 경조사 지원 및 생일 축하금\n• 교육비 지원 및 도서구입비\n• 점심식대 지원\n• 야근식대 및 교통비 지원\n• 건강검진 및 단체상해보험"\n\n어떤 복리후생을 제공하실 예정인가요?';
-    } else if (input.includes('근무') || input.includes('조건')) {
-      return '근무 조건 부분을 작성해드릴게요! ⏰\n\n추천 템플릿:\n\n"근무 조건:\n• 근무시간: 09:00-18:00 (점심시간 12:00-13:00)\n• 근무형태: 정규직 (수습기간 3개월)\n• 근무지: [회사 주소]\n• 급여: 연봉 협의 (경력에 따라 차등)\n• 근무일: 월~금 (주5일 근무)"\n\n어떤 근무 조건을 설정하실 예정인가요?';
-    } else {
-      return `'${input}' 관련 공고 내용을 작성해드릴게요! 📄\n\n좋은 공고 내용의 핵심:\n\n• 명확하고 구체적인 정보\n• 지원자 입장에서의 매력\n• 회사의 진정성과 투명성\n• 행동 유도 (지원 방법)\n\n어떤 부분부터 작성하고 싶으신가요?`;
-    }
-  };
-
-  // 일반적인 응답 생성
-  const generateGenericResponse = (input, field) => {
-    return `'${input}'에 대해 알려주셨군요! 👍\n\n이 정보를 바탕으로 채용공고를 작성해드릴게요. 다른 궁금한 점이 있으시면 언제든 물어보세요.`;
-  };
-
-  // 값 추출 함수들
-  const extractDepartmentValue = (input) => {
-    const departments = ['개발', '마케팅', '디자인', '영업', '기획', '인사', '회계', '운영'];
-    for (const dept of departments) {
-      if (input.includes(dept)) return dept;
-    }
-    return input;
-  };
-
-  const extractHeadcountValue = (input) => {
-    const numbers = input.match(/\d+/);
-    return numbers ? `${numbers[0]}명` : input;
-  };
-
-  const extractWorkHoursValue = (input) => {
-    if (input.includes('유연')) return '유연근무제';
-    if (input.includes('재택')) return '재택근무 가능';
-    return input;
-  };
-
-  const extractLocationValue = (input) => {
-    const cities = ['서울', '부산', '대구', '인천', '대전', '광주', '울산'];
-    for (const city of cities) {
-      if (input.includes(city)) return city;
-    }
-    return input;
-  };
-
-  const extractSalaryValue = (input) => {
-    return input;
-  };
-
-  const extractDeadlineValue = (input) => {
-    return input;
-  };
-
-  const extractEmailValue = (input) => {
-    return input;
-  };
-
-  // 제안 생성 함수들
-  const generateDepartmentSuggestions = (input) => {
-    if (input.includes('개발')) return ['프론트엔드', '백엔드', '풀스택', '모바일'];
-    if (input.includes('마케팅')) return ['디지털마케팅', '브랜드마케팅', '성장마케팅', 'B2B마케팅'];
-    if (input.includes('디자인')) return ['UI/UX', '그래픽디자인', '제품디자인', '웹디자인'];
-    return ['개발', '마케팅', '디자인', '영업', '기획'];
-  };
-
-  const generateHeadcountSuggestions = (input) => {
-    return ['1명', '2명', '3명', '5명', '10명'];
-  };
-
-  const generateMainDutiesSuggestions = (input) => {
-    if (input.includes('개발')) return ['웹개발', '앱개발', '백엔드개발', '데이터분석'];
-    if (input.includes('디자인')) return ['UI설계', 'UX리서치', '프로토타입', '디자인시스템'];
-    return ['업무기획', '프로젝트관리', '고객관리', '데이터분석'];
-  };
-
-  const generateWorkHoursSuggestions = (input) => {
-    return ['09:00-18:00', '10:00-19:00', '유연근무제', '재택근무'];
-  };
-
-  const generateLocationSuggestions = (input) => {
-    return ['서울', '부산', '대구', '인천', '대전', '원격근무'];
-  };
-
-  const generateSalarySuggestions = (input) => {
-    return ['면접 후 협의', '3000만원', '4000만원', '5000만원'];
-  };
-
-  const generateDeadlineSuggestions = (input) => {
-    return ['2024년 12월 31일', '2024년 11월 30일', '채용 시 마감'];
-  };
-
-  const generateEmailSuggestions = (input) => {
-    return ['hr@company.com', 'recruit@company.com'];
-  };
-
-  const handleAutoFill = (suggestion) => {
-    onFieldUpdate?.(currentField.key, suggestion);
-    setAutoFillSuggestions([]);
-    
-    // 다음 필드로 이동
-    const currentIndex = fields.findIndex(f => f.key === currentField.key);
-    if (currentIndex < fields.length - 1) {
-      const nextField = fields[currentIndex + 1];
-      setCurrentField(nextField);
-      
-      // 다음 필드에 대한 빠른 질문들 생성
-      generateQuickQuestions(nextField);
-    }
-  };
-
-  const handleQuickQuestion = (question) => {
-    setInputValue(question);
-    sendMessage();
-  };
-
-  const handleKeyPress = (e) => {
+  // 키보드 이벤트 처리
+  const handleKeyPress = useCallback((e) => {
     if (e.key === 'Enter' && !e.shiftKey) {
       e.preventDefault();
-      sendMessage();
+      if (inputValue.trim() && sendMessageRef.current) {
+        sendMessageRef.current(inputValue.trim());
+      }
     }
-  };
+  }, [inputValue]);
 
+  // 자동완성 클릭 처리
+  const handleAutoFill = useCallback((suggestion) => {
+    console.log(`[DEBUG] 자동완성 선택됨: ${suggestion}`);
+    
+    // 자동완성 선택 시 즉시 필드 업데이트
+    if (currentField && onFieldUpdate) {
+      // 추천문구가 긴 경우 전체 내용을 그대로 사용
+      const fieldValue = suggestion;
+      
+      console.log(`[DEBUG] 자동완성 필드 업데이트 - 필드: ${currentField.key}, 값: ${fieldValue}`);
+      onFieldUpdate(currentField.key, fieldValue);
+      
+      // 필드 업데이트 후 다음 필드로 이동
+      const currentFieldIndex = fields.findIndex(f => f.key === currentField.key);
+      if (currentFieldIndex !== -1 && currentFieldIndex < fields.length - 1) {
+        const nextField = fields[currentFieldIndex + 1];
+        setCurrentField(nextField);
+        // 다음 필드에 대한 추천 업데이트
+        setAutoFillSuggestions(getFieldSuggestions(nextField.key, formData));
+        
+        // 다음 필드로 이동했다는 메시지 추가
+        const nextFieldMessage = {
+          type: 'bot',
+          content: `좋습니다! 이제 **${nextField.label}**에 대해 알려주세요.`,
+          timestamp: new Date(),
+          id: `bot-next-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`
+        };
+        setMessages(prev => [...prev, nextFieldMessage]);
+      } else {
+        // 모든 필드가 완료되면 currentField를 null로 설정
+        setCurrentField(null);
+        setAutoFillSuggestions([]);
+        setIsSuggestionsExpanded(false);
+        
+        // 완료 메시지 추가
+        const completeMessage = {
+          type: 'bot',
+          content: `🎉 모든 정보 입력이 완료되었습니다! 채용공고 등록을 진행하겠습니다.`,
+          timestamp: new Date(),
+          id: `bot-complete-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`
+        };
+        setMessages(prev => [...prev, completeMessage]);
+      }
+    }
+    
+    // 자동완성 선택 시 접힌 상태로 변경
+    setIsSuggestionsExpanded(false);
+    
+    // 즉시 메시지 전송 (사용자 메시지는 handleAIResponse에서 추가됨)
+    if (sendMessageRef.current) {
+      console.log(`[DEBUG] 자동완성 메시지 전송: ${suggestion}`);
+      sendMessageRef.current(suggestion.trim());
+    }
+  }, [currentField, onFieldUpdate, fields, formData, messages]);
+
+  // 대화종료 함수
+  const handleEndConversation = useCallback(async () => {
+    try {
+      // 대화종료 메시지 표시
+      const endMessage = {
+        type: 'bot',
+        content: "현재 채팅창을 닫고 대화를 종료합니다.",
+        timestamp: new Date(),
+        id: `bot-${Date.now()}-${Math.random().toString(36).substr(2, 9)}-end`
+      };
+      setMessages(prev => [...prev, endMessage]);
+      
+      // 3초 후에 실제 종료 처리
+      const timeoutId = setTimeout(async () => {
+        try {
+          // AI 세션 종료
+          await aiService.endSession();
+          
+          // 대화 초기화
+          setMessages([]);
+          setInputValue('');
+          setCurrentField(null);
+          setAutoFillSuggestions([]);
+          setIsSuggestionsExpanded(false);
+          
+          // 모달 종료
+          onClose();
+          
+          console.log('[EnhancedModalChatbot] 대화종료 완료');
+        } catch (error) {
+          console.error('[EnhancedModalChatbot] 대화종료 오류:', error);
+          // 오류가 발생해도 모달은 종료
+          onClose();
+        }
+      }, 3000);
+      
+      // 취소 버튼을 위한 메시지 추가 (1초 후)
+      setTimeout(() => {
+        const cancelMessage = {
+          type: 'bot',
+          content: "취소하려면 아래 버튼을 클릭하세요.",
+          timestamp: new Date(),
+          id: `bot-${Date.now()}-${Math.random().toString(36).substr(2, 9)}-cancel`,
+          showCancelButton: true
+        };
+        setMessages(prev => [...prev, cancelMessage]);
+      }, 1000);
+      
+    } catch (error) {
+      console.error('[EnhancedModalChatbot] 대화종료 메시지 표시 오류:', error);
+      // 오류가 발생해도 모달은 종료
+      onClose();
+    }
+  }, [aiService, onClose]);
+
+  // 취소 버튼 클릭 함수
+  const handleCancelEndConversation = useCallback(() => {
+    // 취소 메시지 표시
+    const cancelConfirmMessage = {
+      type: 'bot',
+      content: "대화종료가 취소되었습니다. 계속해서 대화하실 수 있습니다.",
+      timestamp: new Date(),
+      id: `bot-${Date.now()}-${Math.random().toString(36).substr(2, 9)}-cancel-confirm`
+    };
+    setMessages(prev => [...prev, cancelConfirmMessage]);
+  }, []);
+
+  // 항목 선택 토글 함수
+  const handleItemToggle = useCallback((itemId) => {
+    setSelectedItems(prev => {
+      if (prev.includes(itemId)) {
+        return prev.filter(id => id !== itemId);
+      } else {
+        return [...prev, itemId];
+      }
+    });
+  }, []);
+
+  // 모든 항목 선택/해제 함수
+  const handleSelectAll = useCallback(() => {
+    setSelectedItems(prev => {
+      if (prev.length === currentItems.length) {
+        return [];
+      } else {
+        return currentItems.map(item => item.id);
+      }
+    });
+  }, [currentItems]);
+
+  // 선택된 항목 등록 함수
+  const handleRegisterSelectedItems = useCallback(() => {
+    const selectedTexts = currentItems
+      .filter(item => selectedItems.includes(item.id))
+      .map(item => item.text)
+      .join('\n');
+    
+    if (selectedTexts && onFieldUpdate && currentField) {
+      onFieldUpdate(currentField.key, selectedTexts);
+    }
+    
+    // 선택 상태 초기화
+    setSelectedItems([]);
+    setCurrentItems([]);
+  }, [selectedItems, currentItems, onFieldUpdate, currentField]);
+
+  // 항목 수정 함수
+  const handleEditItems = useCallback(() => {
+    const selectedTexts = currentItems
+      .filter(item => selectedItems.includes(item.id))
+      .map(item => item.text)
+      .join('\n');
+    
+    setInputValue(selectedTexts);
+  }, [selectedItems, currentItems]);
+
+  // 모달이 열릴 때 챗봇 닫기
+  useEffect(() => {
+    if (isOpen) {
+      console.log('EnhancedModalChatbot 모달이 열림 - 챗봇 닫기 이벤트 발생');
+      const event = new CustomEvent('closeChatbot');
+      window.dispatchEvent(event);
+    }
+  }, [isOpen]);
+
+  // 모달 닫을 때 AI 세션 종료 및 타이머 정리
+  useEffect(() => {
+    return () => {
+      if (isOpen) {
+        aiService.endSession();
+      }
+      // 타이머 정리
+      if (inputUpdateTimeout.current) {
+        clearTimeout(inputUpdateTimeout.current);
+      }
+    };
+  }, [isOpen, aiService]);
+
+  console.log('[EnhancedModalChatbot] 렌더링, isOpen:', isOpen, 'aiAssistant:', aiAssistant);
+  
   if (!isOpen) return null;
 
   return (
-    <ModalOverlay onClick={onClose}>
-      <ModalContainer onClick={(e) => e.stopPropagation()}>
-        <FormSection>
-          <div style={{ marginBottom: '20px' }}>
-            <h2 style={{ margin: '0 0 16px 0', fontSize: '24px', fontWeight: '600' }}>
-              {title}
-            </h2>
-            {aiAssistant && (
-              <p style={{ color: '#6b7280', fontSize: '14px', margin: 0 }}>
-                AI 어시스턴트가 입력을 도와드립니다. 오른쪽 채팅창에서 궁금한 점을 물어보세요!
-              </p>
+    <ModalOverlay key="enhanced-chatbot-overlay">
+      <ModalContainer key="enhanced-chatbot-container">
+        {/* Form Section */}
+        {/* <FormSection>
+          <SectionTitle>채용공고 정보 입력</SectionTitle>
+          <form>
+            {fields && fields.length > 0 ? (
+              fields.map(field => (
+                <FormField key={field.key}>
+                  <label htmlFor={field.key}>
+                    {field.label}
+                    {field.required && <span style={{ color: 'red', marginLeft: '4px' }}>*</span>}
+                    {currentField && currentField.key === field.key && (
+                      <span style={{ 
+                        color: '#667eea', 
+                        marginLeft: '8px', 
+                        fontSize: '0.9em',
+                        fontWeight: 'bold'
+                      }}>
+                        🔄 진행 중...
+                      </span>
+                    )}
+                  </label>
+                  {field.type === 'textarea' ? (
+                    <TextArea
+                      id={field.key}
+                      value={formData[field.key] || ''}
+                      onChange={(e) => onFieldUpdate(field.key, e.target.value)}
+                      disabled={false}
+                      rows={4}
+                      style={{
+                        borderColor: currentField && currentField.key === field.key ? '#667eea' : '#cbd5e0',
+                        boxShadow: currentField && currentField.key === field.key ? '0 0 0 3px rgba(102, 126, 234, 0.2)' : 'none'
+                      }}
+                    />
+                  ) : (
+                    <input
+                      type={field.type}
+                      id={field.key}
+                      value={formData[field.key] || ''}
+                      onChange={(e) => onFieldUpdate(field.key, e.target.value)}
+                      disabled={false}
+                      style={{
+                        borderColor: currentField && currentField.key === field.key ? '#667eea' : '#cbd5e0',
+                        boxShadow: currentField && currentField.key === field.key ? '0 0 0 3px rgba(102, 126, 234, 0.2)' : 'none'
+                      }}
+                    />
+                  )}
+                </FormField>
+              ))
+            ) : (
+              <div style={{ 
+                padding: '20px', 
+                textAlign: 'center', 
+                color: '#666',
+                fontStyle: 'italic'
+              }}>
+                설정된 필드가 없습니다.
+              </div>
             )}
-          </div>
-          {children}
-        </FormSection>
-        
+            <ButtonGroup>
+              <FormActionButton onClick={() => saveDraft(formData)}>초안 저장</FormActionButton>
+              <FormActionButton $primary onClick={() => downloadPDF(formData, 'pdf')}>PDF 다운로드</FormActionButton>
+            </ButtonGroup>
+          </form>
+        </FormSection> */}
+
+        {/* Chatbot Section */}
         {aiAssistant && (
           <ChatbotSection>
             <ChatbotHeader>
-              <span>🤖 AI 어시스턴트</span>
-              <div style={{ display: 'flex', gap: '8px', alignItems: 'center' }}>
-                <button
-                  onClick={() => {
-                    setMessages([]);
-                    startAIAssistant();
-                  }}
-                  style={{
-                    background: 'rgba(255, 255, 255, 0.2)',
-                    border: 'none',
-                    color: 'white',
-                    cursor: 'pointer',
-                    fontSize: '12px',
-                    padding: '4px 8px',
-                    borderRadius: '4px',
-                    transition: 'all 0.2s ease'
-                  }}
-                  onMouseEnter={(e) => {
-                    e.currentTarget.style.background = 'rgba(255, 255, 255, 0.3)';
-                  }}
-                  onMouseLeave={(e) => {
-                    e.currentTarget.style.background = 'rgba(255, 255, 255, 0.2)';
-                  }}
-                >
-                  새로고침
-                </button>
-                <button
-                  onClick={onClose}
-                  style={{
-                    background: 'rgba(255, 255, 255, 0.2)',
-                    border: 'none',
-                    color: 'white',
-                    cursor: 'pointer',
-                    fontSize: '14px',
-                    padding: '6px 10px',
-                    borderRadius: '6px',
-                    transition: 'all 0.2s ease',
-                    display: 'flex',
-                    alignItems: 'center',
-                    gap: '4px'
-                  }}
-                  onMouseEnter={(e) => {
-                    e.currentTarget.style.background = 'rgba(255, 255, 255, 0.3)';
-                  }}
-                  onMouseLeave={(e) => {
-                    e.currentTarget.style.background = 'rgba(255, 255, 255, 0.2)';
-                  }}
-                >
-                  <span style={{ fontSize: '12px' }}>닫기</span>
-                  <span style={{ fontSize: '16px' }}>✕</span>
-                </button>
+              <span>AI 어시스턴트</span>
+              <div style={{ display: 'flex', alignItems: 'center' }}>
+                <EndConversationButton onClick={handleEndConversation}>
+                  대화종료
+                </EndConversationButton>
+                <CloseButton onClick={onClose}>&times;</CloseButton>
               </div>
             </ChatbotHeader>
-            
+
             <ChatbotMessages>
-              {messages.map((message, index) => (
-                <Message key={index} type={message.type}>
-                  {message.content}
+              {messages.map((message) => (
+                <Message key={message.id} type={message.type}>
+                  {message.content.split('\n').map((line, i) => (
+                    <React.Fragment key={i}>
+                      {line}
+                      {i < message.content.split('\n').length - 1 && <br />}
+                    </React.Fragment>
+                  ))}
+                  {message.showCancelButton && (
+                    <div style={{ marginTop: '8px' }}>
+                      <CancelButton onClick={handleCancelEndConversation}>
+                        취소
+                      </CancelButton>
+                    </div>
+                  )}
+                  
+                  {/* 선택형 응답인 경우 선택 UI 표시 */}
+                  {message.responseType === 'selection' && message.selectableItems && message.selectableItems.length > 0 && (
+                    <ItemSelectionContainer>
+                      <div style={{ marginBottom: '12px', fontSize: '0.9em', color: '#4a5568' }}>
+                        원하는 항목을 선택해주세요:
+                      </div>
+                      {message.selectableItems.map((item, index) => (
+                        <ItemCard
+                          key={`item-${message.id}-${index}`}
+                          selected={selectedItems.includes(`item-${message.id}-${index}`)}
+                          onClick={() => handleItemToggle(`item-${message.id}-${index}`)}
+                        >
+                          <Checkbox
+                            type="checkbox"
+                            checked={selectedItems.includes(`item-${message.id}-${index}`)}
+                            onChange={() => handleItemToggle(`item-${message.id}-${index}`)}
+                          />
+                          <ItemText>{item.text || item}</ItemText>
+                        </ItemCard>
+                      ))}
+                      <ActionButtons>
+                        <ActionButton onClick={handleSelectAll}>
+                          {selectedItems.length === message.selectableItems.length ? '모두 해제' : '모두 선택'}
+                        </ActionButton>
+                        <ActionButton onClick={handleEditItems} disabled={selectedItems.length === 0}>
+                          수정
+                        </ActionButton>
+                        <ActionButton primary onClick={handleRegisterSelectedItems} disabled={selectedItems.length === 0}>
+                          등록
+                        </ActionButton>
+                      </ActionButtons>
+                    </ItemSelectionContainer>
+                  )}
+                  
+                  {/* 기존 호환성을 위한 처리 */}
+                  {message.showItemSelection && message.items && (
+                    <ItemSelectionContainer>
+                      <div style={{ marginBottom: '12px', fontSize: '0.9em', color: '#4a5568' }}>
+                        원하는 항목을 선택해주세요:
+                      </div>
+                      {message.items.map((item) => (
+                        <ItemCard
+                          key={item.id}
+                          selected={selectedItems.includes(item.id)}
+                          onClick={() => handleItemToggle(item.id)}
+                        >
+                          <Checkbox
+                            type="checkbox"
+                            checked={selectedItems.includes(item.id)}
+                            onChange={() => handleItemToggle(item.id)}
+                          />
+                          <ItemText>{item.text}</ItemText>
+                        </ItemCard>
+                      ))}
+                      <ActionButtons>
+                        <ActionButton onClick={handleSelectAll}>
+                          {selectedItems.length === message.items.length ? '모두 해제' : '모두 선택'}
+                        </ActionButton>
+                        <ActionButton onClick={handleEditItems} disabled={selectedItems.length === 0}>
+                          수정
+                        </ActionButton>
+                        <ActionButton primary onClick={handleRegisterSelectedItems} disabled={selectedItems.length === 0}>
+                          등록
+                        </ActionButton>
+                      </ActionButtons>
+                    </ItemSelectionContainer>
+                  )}
                 </Message>
               ))}
               {isLoading && (
-                <Message type="bot">
-                  <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-                    <div style={{ 
-                      width: '16px', 
-                      height: '16px', 
-                      border: '2px solid #e5e7eb',
-                      borderTop: '2px solid #3b82f6',
-                      borderRadius: '50%',
-                      animation: 'spin 1s linear infinite'
-                    }} />
-                    AI가 응답하고 있습니다...
-                  </div>
-                </Message>
+                <TypingIndicator>
+                  <span></span><span></span><span></span>
+                </TypingIndicator>
               )}
               <div ref={messagesEndRef} />
             </ChatbotMessages>
-            
+
             <ChatbotInput>
-              {/* 빠른 질문 버튼들 */}
-              {quickQuestions.length > 0 && (
-                <div style={{ marginBottom: '12px' }}>
-                  <p style={{ fontSize: '12px', color: '#6b7280', margin: '0 0 8px 0' }}>
-                    💡 빠른 질문:
-                  </p>
-                  <div style={{ display: 'flex', flexWrap: 'wrap', gap: '4px' }}>
-                    {quickQuestions.map((question, index) => (
-                      <QuickQuestionButton
-                        key={index}
-                        onClick={() => handleQuickQuestion(question)}
-                        disabled={isLoading}
-                      >
-                        {question}
-                      </QuickQuestionButton>
-                    ))}
-                  </div>
-                </div>
+              {/* 자동완성 제안 */}
+              {autoFillSuggestions.length > 0 && (
+                <SuggestionsContainer $isExpanded={isSuggestionsExpanded}>
+                  <SuggestionsToggle
+                    $isExpanded={isSuggestionsExpanded}
+                    onClick={() => setIsSuggestionsExpanded(!isSuggestionsExpanded)}
+                  >
+                    <span style={{ fontSize: '1.1em' }}>⚡</span>
+                    <span>추천 리스트 보기</span>
+                    <span style={{ marginLeft: 'auto', fontSize: '0.8em', opacity: 0.8 }}>
+                      {isSuggestionsExpanded ? '접기' : '펼치기'}
+                    </span>
+                  </SuggestionsToggle>
+                  
+                  <SuggestionsContent $isExpanded={isSuggestionsExpanded}>
+                    <SuggestionsGrid>
+                      {autoFillSuggestions.map((suggestion) => (
+                        <AutoFillButton
+                          key={suggestion}
+                          onClick={() => handleAutoFill(suggestion)}
+                          disabled={isLoading}
+                        >
+                          <span>⚡</span>
+                          {suggestion}
+                        </AutoFillButton>
+                      ))}
+                    </SuggestionsGrid>
+                  </SuggestionsContent>
+                </SuggestionsContainer>
               )}
               
               <InputArea>
                 <TextArea
                   ref={inputRef}
                   value={inputValue}
-                  onChange={(e) => setInputValue(e.target.value)}
-                  onKeyPress={handleKeyPress}
+                  onChange={(e) => {
+                    const newValue = e.target.value;
+                    setInputValue(newValue);
+                    
+                    // 실시간 필드 업데이트 (입력 중에도 반영)
+                    if (currentField && newValue.trim().length > 0) {
+                      // 약간의 지연을 두어 타이핑 중에는 업데이트하지 않음
+                      clearTimeout(inputUpdateTimeout.current);
+                      inputUpdateTimeout.current = setTimeout(() => {
+                        if (onFieldUpdate) {
+                          console.log('[EnhancedModalChatbot] 실시간 필드 업데이트:', currentField.key, newValue.trim());
+                          onFieldUpdate(currentField.key, newValue.trim());
+                        }
+                      }, 1000); // 1초 후 업데이트
+                    }
+                  }}
+                  onKeyDown={handleKeyPress}
                   placeholder="궁금한 점을 물어보거나 답변을 입력하세요..."
                   rows={3}
                   disabled={isLoading}
                 />
                 <SendButton
-                  onClick={sendMessage}
+                  onClick={() => sendMessageRef.current && sendMessageRef.current(inputValue.trim())}
                   disabled={isLoading || !inputValue.trim()}
                 >
                   전송
                 </SendButton>
               </InputArea>
-              
-              {autoFillSuggestions.length > 0 && (
-                <div style={{ marginTop: '12px' }}>
-                  <p style={{ fontSize: '12px', color: '#6b7280', margin: '0 0 8px 0' }}>
-                    추천 답변:
-                  </p>
-                  {autoFillSuggestions.map((suggestion, index) => (
-                    <AutoFillButton
-                      key={index}
-                      onClick={() => handleAutoFill(suggestion)}
-                      disabled={isLoading}
-                    >
-                      <span>⚡</span>
-                      {suggestion}
-                    </AutoFillButton>
-                  ))}
-                </div>
-              )}
             </ChatbotInput>
           </ChatbotSection>
         )}
@@ -835,4 +1506,4 @@ const EnhancedModalChatbot = ({
   );
 };
 
-export default EnhancedModalChatbot; 
+export default EnhancedModalChatbot;

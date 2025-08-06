@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useEffect } from 'react';
 import styled from 'styled-components';
 import { motion, AnimatePresence } from 'framer-motion';
 import { 
@@ -207,6 +207,15 @@ const RegistrationMethodModal = ({
 }) => {
   const [selectedMethod, setSelectedMethod] = React.useState(null);
 
+  // 모달이 열릴 때 챗봇 닫기
+  useEffect(() => {
+    if (isOpen) {
+      console.log('RegistrationMethodModal 모달이 열림 - 챗봇 닫기 이벤트 발생');
+      const event = new CustomEvent('closeChatbot');
+      window.dispatchEvent(event);
+    }
+  }, [isOpen]);
+
   const handleMethodSelect = (method) => {
     setSelectedMethod(method);
   };
@@ -221,12 +230,14 @@ const RegistrationMethodModal = ({
     <AnimatePresence>
       {isOpen && (
         <Overlay
+          key="method-overlay"
           initial={{ opacity: 0 }}
           animate={{ opacity: 1 }}
           exit={{ opacity: 0 }}
           onClick={onClose}
         >
           <Modal
+            key="method-modal"
             initial={{ scale: 0.9, opacity: 0 }}
             animate={{ scale: 1, opacity: 1 }}
             exit={{ scale: 0.9, opacity: 0 }}

@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import styled from 'styled-components';
 import { motion, AnimatePresence } from 'framer-motion';
 import TemplateModal from './TemplateModal';
@@ -484,6 +484,15 @@ const ImageBasedRegistration = ({
     contactEmail: '',
     deadline: ''
   });
+
+  // 모달이 열릴 때 챗봇 닫기
+  useEffect(() => {
+    if (isOpen) {
+      console.log('ImageBasedRegistration 모달이 열림 - 챗봇 닫기 이벤트 발생');
+      const event = new CustomEvent('closeChatbot');
+      window.dispatchEvent(event);
+    }
+  }, [isOpen]);
 
   const [generatedImages, setGeneratedImages] = useState([]);
 
@@ -1103,12 +1112,14 @@ const ImageBasedRegistration = ({
     <AnimatePresence>
       {isOpen && (
         <Overlay
+          key="image-overlay"
           initial={{ opacity: 0 }}
           animate={{ opacity: 1 }}
           exit={{ opacity: 0 }}
           onClick={onClose}
         >
           <Modal
+            key="image-modal"
             initial={{ scale: 0.9, opacity: 0 }}
             animate={{ scale: 1, opacity: 1 }}
             exit={{ scale: 0.9, opacity: 0 }}
