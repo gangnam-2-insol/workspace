@@ -24,6 +24,152 @@ db.users.insertMany([
   }
 ]);
 
+// 지원자 컬렉션 생성 및 샘플 데이터
+db.createCollection('applicants');
+db.applicants.insertMany([
+  {
+    id: "1",
+    name: "김철수",
+    email: "kim.chulsoo@email.com",
+    phone: "010-1234-5678",
+    position: "프론트엔드 개발자",
+    experience: "3년",
+    education: "컴퓨터공학과 졸업",
+    status: "서류합격",
+    appliedDate: "2024-01-15",
+    aiScores: {
+      resume: 85,
+      coverLetter: 78,
+      portfolio: 92
+    },
+    aiSuitability: 87,
+    documents: {
+      resume: {
+        exists: true,
+        summary: "React, TypeScript, Next.js 경험 풍부. 3년간 프론트엔드 개발 경력. 주요 프로젝트: 이커머스 플랫폼 구축, 관리자 대시보드 개발.",
+        keywords: ["React", "TypeScript", "Next.js", "Redux", "Tailwind CSS"],
+        content: "상세 이력서 내용..."
+      },
+      portfolio: {
+        exists: true,
+        summary: "GitHub에 15개 이상의 프로젝트 포트폴리오 보유. 반응형 웹 디자인, PWA 개발 경험.",
+        keywords: ["GitHub", "PWA", "반응형", "UI/UX"],
+        content: "포트폴리오 상세 내용..."
+      },
+      coverLetter: {
+        exists: true,
+        summary: "개발자로서의 성장 과정과 회사에 기여할 수 있는 역량을 명확하게 표현.",
+        keywords: ["성장", "기여", "열정", "학습"],
+        content: "자기소개서 상세 내용..."
+      }
+    },
+    interview: {
+      scheduled: true,
+      date: "2024-01-25",
+      time: "14:00",
+      type: "대면",
+      location: "회사 면접실",
+      status: "예정"
+    },
+    created_at: new Date(),
+    updated_at: new Date()
+  },
+  {
+    id: "2",
+    name: "이영희",
+    email: "lee.younghee@email.com",
+    phone: "010-2345-6789",
+    position: "백엔드 개발자",
+    experience: "5년",
+    education: "소프트웨어공학과 졸업",
+    status: "보류",
+    appliedDate: "2024-01-14",
+    aiScores: {
+      resume: 92,
+      coverLetter: 85,
+      portfolio: 88
+    },
+    aiSuitability: 89,
+    documents: {
+      resume: {
+        exists: true,
+        summary: "Java, Spring Boot, MySQL 경험 풍부. 5년간 백엔드 개발 경력. 마이크로서비스 아키텍처 설계 경험.",
+        keywords: ["Java", "Spring Boot", "MySQL", "Microservices", "AWS"],
+        content: "상세 이력서 내용..."
+      },
+      portfolio: {
+        exists: true,
+        summary: "대용량 트래픽 처리 시스템 구축 경험. 성능 최적화 및 모니터링 시스템 구축.",
+        keywords: ["성능최적화", "모니터링", "대용량처리", "시스템설계"],
+        content: "포트폴리오 상세 내용..."
+      },
+      coverLetter: {
+        exists: true,
+        summary: "시스템 아키텍처 설계 능력과 팀 리더십 경험을 강조.",
+        keywords: ["아키텍처", "리더십", "시스템설계", "팀워크"],
+        content: "자기소개서 상세 내용..."
+      }
+    },
+    interview: {
+      scheduled: false,
+      date: null,
+      time: null,
+      type: null,
+      location: null,
+      status: "미정"
+    },
+    created_at: new Date(),
+    updated_at: new Date()
+  },
+  {
+    id: "3",
+    name: "박민수",
+    email: "park.minsu@email.com",
+    phone: "010-3456-7890",
+    position: "UI/UX 디자이너",
+    experience: "4년",
+    education: "디자인학과 졸업",
+    status: "서류불합격",
+    appliedDate: "2024-01-13",
+    aiScores: {
+      resume: 65,
+      coverLetter: 72,
+      portfolio: 78
+    },
+    aiSuitability: 71,
+    documents: {
+      resume: {
+        exists: true,
+        summary: "Figma, Adobe XD 사용 경험. 4년간 UI/UX 디자인 경력. 모바일 앱 디자인 전문.",
+        keywords: ["Figma", "Adobe XD", "UI/UX", "모바일앱", "디자인시스템"],
+        content: "상세 이력서 내용..."
+      },
+      portfolio: {
+        exists: true,
+        summary: "다양한 모바일 앱 디자인 프로젝트 경험. 사용자 리서치 및 프로토타이핑 경험.",
+        keywords: ["모바일앱", "프로토타이핑", "사용자리서치", "디자인시스템"],
+        content: "포트폴리오 상세 내용..."
+      },
+      coverLetter: {
+        exists: true,
+        summary: "사용자 중심의 디자인 철학과 창의적인 문제 해결 능력을 강조.",
+        keywords: ["사용자중심", "창의성", "문제해결", "디자인철학"],
+        content: "자기소개서 상세 내용..."
+      }
+    },
+    interview: {
+      scheduled: false,
+      date: null,
+      time: null,
+      type: null,
+      location: null,
+      status: "미정"
+    },
+    created_at: new Date(),
+    updated_at: new Date()
+  }
+]);
+
 // 이력서 컬렉션 생성 및 샘플 데이터
 db.createCollection('resumes');
 db.resumes.insertMany([
@@ -82,101 +228,6 @@ db.portfolios.insertMany([
     github_url: "https://github.com/user2/fastapi-project",
     status: "active", 
     created_at: new Date()
-  }
-]);
-
-// 인재 컬렉션 생성 및 샘플 데이터
-db.createCollection('talents');
-db.talents.insertMany([
-  {
-    name: '김철수',
-    position: '시니어 프론트엔드 개발자',
-    experience: '5년',
-    location: '서울',
-    skills: ['React', 'TypeScript', 'Next.js', 'Tailwind CSS', 'Redux', 'GraphQL', 'Jest', 'AWS', 'Docker'],
-    lastActive: '2024-01-15',
-    portfolioScore: 92,
-    aiProfile: {
-      personality: ['창의적', '협업 지향적'],
-      abilities: ['frontend', 'tools', 'cloud'],
-      keywords: ['React', 'TypeScript', 'AWS', 'Docker']
-    },
-    profileText: '5년간 React 생태계에서 다양한 프로젝트를 수행해온 프론트엔드 개발자입니다. TypeScript와 Next.js를 활용한 모던 웹 개발에 전문성을 가지고 있으며, AWS 클라우드 환경에서의 배포 경험이 풍부합니다.',
-    recommendationReason: 'React 생태계 전문성과 클라우드 경험이 뛰어나며, 현대적인 개발 스택에 능숙합니다.',
-    created_at: new Date(),
-    updated_at: new Date()
-  },
-  {
-    name: '이영희',
-    position: '백엔드 아키텍트',
-    experience: '7년',
-    location: '경기',
-    skills: ['Node.js', 'Python', 'Django', 'PostgreSQL', 'Docker', 'Kubernetes', 'Redis', 'GraphQL', 'Microservices'],
-    lastActive: '2024-01-14',
-    portfolioScore: 89,
-    aiProfile: {
-      personality: ['리더십', '세심함'],
-      abilities: ['backend', 'database', 'cloud'],
-      keywords: ['Node.js', 'Python', 'PostgreSQL', 'Kubernetes']
-    },
-    profileText: '대규모 시스템 설계와 마이크로서비스 아키텍처 구축 경험이 있는 백엔드 전문가입니다. 성능 최적화와 확장성 있는 시스템 구축에 전문성을 가지고 있습니다.',
-    recommendationReason: '시스템 아키텍처 설계 능력이 뛰어나고, 대용량 트래픽 처리 경험이 풍부합니다.',
-    created_at: new Date(),
-    updated_at: new Date()
-  },
-  {
-    name: '박민수',
-    position: 'UI/UX 디자이너',
-    experience: '4년',
-    location: '서울',
-    skills: ['Figma', 'Adobe XD', 'Sketch', 'InVision', 'Principle', 'HTML5', 'CSS3', 'JavaScript', 'React'],
-    lastActive: '2024-01-13',
-    portfolioScore: 85,
-    aiProfile: {
-      personality: ['창의적', '세심함'],
-      abilities: ['frontend', 'tools'],
-      keywords: ['Figma', 'React', 'JavaScript', 'CSS3']
-    },
-    profileText: '사용자 중심의 디자인과 프론트엔드 개발 지식을 모두 갖춘 UI/UX 디자이너입니다. 디자인 시스템 구축과 개발자와의 협업에 능숙합니다.',
-    recommendationReason: '디자인과 개발 지식을 모두 갖춘 융합형 인재로, 개발팀과의 협업이 원활합니다.',
-    created_at: new Date(),
-    updated_at: new Date()
-  },
-  {
-    name: '정수진',
-    position: '데이터 사이언티스트',
-    experience: '6년',
-    location: '부산',
-    skills: ['Python', 'TensorFlow', 'PyTorch', 'Pandas', 'NumPy', 'SQL', 'AWS', 'Docker', 'Kubernetes'],
-    lastActive: '2024-01-12',
-    portfolioScore: 94,
-    aiProfile: {
-      personality: ['세심함', '리더십'],
-      abilities: ['ai', 'cloud', 'database'],
-      keywords: ['Python', 'TensorFlow', 'AWS', 'SQL']
-    },
-    profileText: 'ML/DL 모델 개발과 대용량 데이터 처리에 전문성을 가진 데이터 사이언티스트입니다. 클라우드 환경에서의 AI 서비스 구축 경험이 풍부합니다.',
-    recommendationReason: 'AI/ML 전문 지식과 실무 경험이 뛰어나며, 클라우드 기반 AI 서비스 구축 능력이 우수합니다.',
-    created_at: new Date(),
-    updated_at: new Date()
-  },
-  {
-    name: '최하늘',
-    position: '풀스택 개발자',
-    experience: '3년',
-    location: '대구',
-    skills: ['React', 'Node.js', 'Express.js', 'MongoDB', 'TypeScript', 'Docker', 'AWS', 'Git'],
-    lastActive: '2024-01-16',
-    portfolioScore: 87,
-    aiProfile: {
-      personality: ['협업 지향적', '창의적'],
-      abilities: ['frontend', 'backend', 'database', 'cloud'],
-      keywords: ['React', 'Node.js', 'MongoDB', 'AWS']
-    },
-    profileText: '프론트엔드와 백엔드를 모두 아우르는 풀스택 개발자로, 스타트업 환경에서 빠른 프로토타이핑과 MVP 개발 경험이 있습니다.',
-    recommendationReason: '전체적인 개발 프로세스를 이해하고 있어 다양한 프로젝트에 유연하게 대응 가능합니다.',
-    created_at: new Date(),
-    updated_at: new Date()
   }
 ]);
 
