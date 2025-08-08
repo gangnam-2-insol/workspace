@@ -16,8 +16,7 @@ import {
   FiX,
   FiBell,
   FiSearch,
-  FiBriefcase,
-  FiUserCheck
+  FiBriefcase
 } from 'react-icons/fi';
 
 const LayoutContainer = styled.div`
@@ -38,7 +37,7 @@ const Sidebar = styled(motion.div)`
   z-index: 1000;
 
   @media (max-width: 768px) {
-    transform: translateX(${props => props.$isOpen ? '0' : '-100%'});
+    transform: translateX(${props => props.isOpen ? '0' : '-100%'});
     width: 100%;
     transition: transform 0.3s ease;
   }
@@ -163,7 +162,7 @@ const Overlay = styled.div`
   display: none;
 
   @media (max-width: 768px) {
-    display: ${props => props.$isOpen ? 'block' : 'none'};
+    display: ${props => props.isOpen ? 'block' : 'none'};
   }
 `;
 
@@ -178,11 +177,12 @@ const navigationItems = [
     title: '채용 관리',
     items: [
       { name: '채용공고 등록', path: '/job-posting', icon: FiBriefcase },
-      { name: '지원자 관리', path: '/applicants', icon: FiUserCheck },
-      // 면접 관리 기능 - 현재 비활성화됨
-      // { name: '면접 관리', path: '/interview', icon: FiVideo },
-      // 캘린더 기능 - 현재 비활성화됨
-      // { name: '캘린더', path: '/interview-calendar', icon: FiCalendar },
+      { name: '이력서 관리', path: '/resume', icon: FiFileText },
+      { name: '면접 관리', path: '/interview', icon: FiVideo },
+      { name: '캘린더', path: '/interview-calendar', icon: FiCalendar },
+      { name: '포트폴리오 분석', path: '/portfolio', icon: FiCode },
+      { name: '자소서 검증', path: '/cover-letter', icon: FiEdit3 },
+      { name: '인재 추천', path: '/talent', icon: FiUsers }
     ]
   },
   {
@@ -204,12 +204,12 @@ const Layout = ({ children }) => {
 
   return (
     <LayoutContainer>
-      <Overlay $isOpen={isSidebarOpen} onClick={toggleSidebar} />
+      <Overlay isOpen={isSidebarOpen} onClick={toggleSidebar} />
       <Sidebar
         initial={{ x: -280 }}
         animate={{ x: 0 }}
         transition={{ duration: 0.3 }}
-        $isOpen={isSidebarOpen}
+        isOpen={isSidebarOpen}
       >
         <div style={{ padding: '0 24px 24px' }}>
           <Logo>

@@ -32,12 +32,6 @@ const FloatingChatbot = ({ page, onFieldUpdate, onComplete, onPageAction }) => {
   // 디버깅용 로그
   console.log('FloatingChatbot 렌더링됨, page:', page);
 
-  // 챗봇 닫기 함수
-  const closeChat = () => {
-    setIsOpen(false);
-    console.log('챗봇이 자동으로 닫혔습니다.');
-  };
-
   // 세션 초기화 로직 제거 (이제 불필요)
   useEffect(() => {
     // initializeSession(); // 세션 초기화 로직 제거
@@ -51,19 +45,6 @@ const FloatingChatbot = ({ page, onFieldUpdate, onComplete, onPageAction }) => {
       setMessages([welcomeMessage]);
     }
   }, [page]); // page 변경 시 환영 메시지 다시 설정
-
-  // 챗봇 닫기 이벤트 리스너
-  useEffect(() => {
-    const handleCloseChatbot = () => {
-      closeChat();
-    };
-
-    window.addEventListener('closeChatbot', handleCloseChatbot);
-
-    return () => {
-      window.removeEventListener('closeChatbot', handleCloseChatbot);
-    };
-  }, []);
 
   // 세션 초기화 함수 제거
   // const initializeSession = async () => { /* ... */ };
@@ -311,38 +292,16 @@ const FloatingChatbot = ({ page, onFieldUpdate, onComplete, onPageAction }) => {
     console.log('소문자 변환된 메시지:', lowerMessage);
     console.log('현재 페이지:', page);
 
-    const jobPostingKeywords = ['채용공고', '공고', '채용', '새공고', '등록', '작성', '구인', '새 공고', '새로운 공고', '신규 공고', '채용 공고', '채용공고 등록', '채용공고 작성', '채용공고 관리', '채용공고 목록', '채용공고 보기', '채용공고 확인', '채용공고 검색', '채용공고 수정', '채용공고 삭제', '채용공고 등록하기', '채용공고 작성하기', '채용공고 만들기', '채용공고 추가', '채용공고 입력', '채용공고 업로드', '채용공고 생성', '채용공고 제작', '채용공고 발행', '채용공고 게시', '채용공고 공개', '채용공고 등록하', '채용공고 작성하', '채용공고 만들', '채용공고 추가하', '채용공고 입력하', '채용공고 업로드하', '채용공고 생성하', '채용공고 제작하', '채용공고 발행하', '채용공고 게시하', '채용공고 공개하'];
+    const jobPostingKeywords = ['채용공고', '공고', '채용', '새공고', '등록', '작성', '구인'];
     const isJobPostingRelated = jobPostingKeywords.some(keyword => lowerMessage.includes(keyword));
-    
-    // 새공고 관련 키워드 특별 처리
-    const newJobPostingKeywords = ['새공고', '새 공고', '새로운 공고', '신규 공고', '새로운 채용', '신규 채용', '새로운 채용공고', '신규 채용공고', '새 채용공고', '새로운 채용 공고', '신규 채용 공고', '새 채용 공고', '새로운 채용공고 등록', '신규 채용공고 등록', '새 채용공고 등록', '새로운 채용공고 작성', '신규 채용공고 작성', '새 채용공고 작성', '새로운 채용공고 만들기', '신규 채용공고 만들기', '새 채용공고 만들기', '새로운 채용공고 추가', '신규 채용공고 추가', '새 채용공고 추가'];
-    const isNewJobPostingRequest = newJobPostingKeywords.some(keyword => lowerMessage.includes(keyword));
 
     if (isJobPostingRelated && page !== 'job-posting') {
         if (onPageAction) {
             console.log('페이지 이동 요청: job-posting');
             onPageAction('changePage:job-posting'); // 페이지 이동 액션 호출
-            
-            // 페이지 이동 후 자동으로 등록 방법 선택 모달 표시
-            setTimeout(() => {
-                console.log('페이지 이동 후 자동으로 등록 방법 선택 모달 표시');
-                onPageAction('openRegistrationMethod');
-            }, 1000); // 1초 후 자동 실행
         }
-        
-        // 모든 채용공고 관련 키워드에 대해 동일한 메시지 제공
         return {
-            message: `**채용공고** 관련 기능을 위해 해당 페이지로 이동할게요! 🚀\n\n⏰ 1초 후 자동으로 등록 방법을 선택할 수 있는 창이 나타납니다.\n\n📋 **등록 방법**:\n• 텍스트 기반: AI가 단계별로 질문하여 직접 입력\n• 이미지 기반: 채용공고 이미지를 업로드하여 자동 인식`
-        };
-    }
-
-    if (isJobPostingRelated && page === 'job-posting') {
-        // job-posting 페이지에서 채용공고 관련 키워드 입력 시 AI 어시스턴트 자동 시작
-        console.log('job-posting 페이지에서 채용공고 키워드 감지 - AI 어시스턴트 자동 시작');
-        startAIChatbot();
-        
-        return {
-            message: `🤖 AI 채용공고 작성 도우미를 시작하겠습니다!\n\n단계별로 질문하여 자동으로 입력해드릴게요.\n\n⏰ 2초 후 자동으로 텍스트 기반 등록을 시작합니다...`
+            message: `**채용공고** 관련 기능을 위해 해당 페이지로 이동할게요! 🚀`
         };
     }
 
@@ -385,14 +344,6 @@ const FloatingChatbot = ({ page, onFieldUpdate, onComplete, onPageAction }) => {
           lowerMessage.includes('만들')) {
         if (lowerMessage.includes('채용') || lowerMessage.includes('공고') || lowerMessage.includes('채용공고') || 
             lowerMessage.includes('새공고')) {
-          
-          // AI 어시스턴트 자동 시작
-          console.log('새공고/채용공고 키워드 감지 - AI 어시스턴트 자동 시작');
-          startAIChatbot();
-          
-          return {
-            message: `🤖 AI 채용공고 작성 도우미를 시작하겠습니다!\n\n단계별로 질문하여 자동으로 입력해드릴게요.\n\n⏰ 2초 후 자동으로 텍스트 기반 등록을 시작합니다...`
-          };
           
           // 텍스트 관련 키워드 감지
           const textKeywords = [
@@ -440,12 +391,7 @@ const FloatingChatbot = ({ page, onFieldUpdate, onComplete, onPageAction }) => {
           
           console.log('텍스트 점수:', textScore, '이미지 점수:', imageScore);
           
-          // 키워드가 없으면 선택 메시지 표시
-          if (textScore === 0 && imageScore === 0) {
-            return {
-              message: '새로운 채용공고를 등록하시는군요! 🎯\n\n어떤 방식으로 등록하시겠습니까?\n\n📝 **텍스트 기반**: AI가 단계별로 질문하여 직접 입력\n🖼️ **이미지 기반**: 채용공고 이미지를 업로드하여 자동 인식\n\n"텍스트" 또는 "이미지"로 답변해주세요!'
-            };
-          } else if (textScore > imageScore && textScore > 0) {
+          if (textScore > imageScore && textScore > 0) {
             // 텍스트 기반 등록 선택
             if (onPageAction) {
               onPageAction('openTextBasedRegistration');
@@ -459,15 +405,8 @@ const FloatingChatbot = ({ page, onFieldUpdate, onComplete, onPageAction }) => {
               }
             }, 2000); // 2초 후 자동 진행
             
-            // 챗봇 자동 닫기 (1초 후)
-            setTimeout(() => {
-              if (onPageAction) {
-                onPageAction('closeChatbot');
-              }
-            }, 1000); // 1초 후 챗봇 닫기
-            
             return {
-              message: '텍스트 기반 채용공고 등록을 시작하겠습니다! 📝\n\nAI가 단계별로 질문하여 자동으로 입력해드릴게요.\n\n⏰ 2초 후 자동으로 다음 단계로 진행됩니다...\n\n💬 챗봇은 1초 후 자동으로 닫힙니다.'
+              message: '텍스트 기반 채용공고 등록을 시작하겠습니다! 📝\n\nAI가 단계별로 질문하여 자동으로 입력해드릴게요.\n\n⏰ 2초 후 자동으로 다음 단계로 진행됩니다...'
             };
           } else if (imageScore > textScore && imageScore > 0) {
             // 이미지 기반 등록 선택
@@ -483,15 +422,8 @@ const FloatingChatbot = ({ page, onFieldUpdate, onComplete, onPageAction }) => {
               }
             }, 2000); // 2초 후 자동 진행
             
-            // 챗봇 자동 닫기 (1초 후)
-            setTimeout(() => {
-              if (onPageAction) {
-                onPageAction('closeChatbot');
-              }
-            }, 1000); // 1초 후 챗봇 닫기
-            
             return {
-              message: '이미지 기반 채용공고 등록을 시작하겠습니다! 🖼️\n\n채용공고 이미지를 업로드해주시면 AI가 자동으로 분석하여 입력해드릴게요.\n\n⏰ 2초 후 자동으로 다음 단계로 진행됩니다...\n\n💬 챗봇은 1초 후 자동으로 닫힙니다.'
+              message: '이미지 기반 채용공고 등록을 시작하겠습니다! 🖼️\n\n채용공고 이미지를 업로드해주시면 AI가 자동으로 분석하여 입력해드릴게요.\n\n⏰ 2초 후 자동으로 다음 단계로 진행됩니다...'
             };
           } else {
             // 키워드가 없거나 동점이면 기본 모달 열기
@@ -542,15 +474,8 @@ const FloatingChatbot = ({ page, onFieldUpdate, onComplete, onPageAction }) => {
           }
         }, 2000);
         
-        // 챗봇 자동 닫기 (1초 후)
-        setTimeout(() => {
-          if (onPageAction) {
-            onPageAction('closeChatbot');
-          }
-        }, 1000); // 1초 후 챗봇 닫기
-        
         return {
-          message: '텍스트 기반 채용공고 등록을 시작하겠습니다! 📝\n\nAI가 단계별로 질문하여 자동으로 입력해드릴게요.\n\n⏰ 2초 후 자동으로 다음 단계로 진행됩니다...\n\n💬 챗봇은 1초 후 자동으로 닫힙니다.'
+          message: '텍스트 기반 채용공고 등록을 시작하겠습니다! 📝\n\nAI가 단계별로 질문하여 자동으로 입력해드릴게요.\n\n⏰ 2초 후 자동으로 다음 단계로 진행됩니다...'
         };
       } else if (hasImageKeyword && !hasTextKeyword) {
         console.log('=== 이미지 기반 등록 선택됨 ===');
@@ -570,15 +495,8 @@ const FloatingChatbot = ({ page, onFieldUpdate, onComplete, onPageAction }) => {
           }
         }, 2000);
         
-        // 챗봇 자동 닫기 (1초 후)
-        setTimeout(() => {
-          if (onPageAction) {
-            onPageAction('closeChatbot');
-          }
-        }, 1000); // 1초 후 챗봇 닫기
-        
         return {
-          message: '이미지 기반 채용공고 등록을 시작하겠습니다! 🖼️\n\n채용공고 이미지를 업로드해주시면 AI가 자동으로 분석하여 입력해드릴게요.\n\n⏰ 2초 후 자동으로 다음 단계로 진행됩니다...\n\n💬 챗봇은 1초 후 자동으로 닫힙니다.'
+          message: '이미지 기반 채용공고 등록을 시작하겠습니다! 🖼️\n\n채용공고 이미지를 업로드해주시면 AI가 자동으로 분석하여 입력해드릴게요.\n\n⏰ 2초 후 자동으로 다음 단계로 진행됩니다...'
         };
       } else {
         console.log('=== 키워드 매칭 실패 또는 조건 불만족 ===');
@@ -741,7 +659,7 @@ const FloatingChatbot = ({ page, onFieldUpdate, onComplete, onPageAction }) => {
     
     console.log('AI 시작 메시지 추가 완료');
     
-    // 자동 진행 활성화 - 2초 후 텍스트 기반 등록 시작
+    // 2초 후 자동으로 텍스트 기반 등록 시작
     setTimeout(() => {
       console.log('=== 2초 타이머 완료 - 자동 진행 시작 ===');
       console.log('onPageAction 존재 여부:', !!onPageAction);
@@ -829,24 +747,16 @@ const FloatingChatbot = ({ page, onFieldUpdate, onComplete, onPageAction }) => {
     console.log('챗봇 상태 변경됨:', !isOpen);
   };
 
-  const sendMessage = async (customInput = null) => {
-    const messageToSend = customInput || inputValue;
-    if (!messageToSend.trim()) return;
+  const sendMessage = async () => {
+    if (!inputValue.trim()) return;
 
     const userMessage = {
       type: 'user',
-      content: messageToSend,
+      content: inputValue,
       timestamp: new Date()
     };
 
-    console.log('[FloatingChatbot] 사용자 메시지 추가:', userMessage);
-    setMessages(prev => {
-      const newMessages = [...prev, userMessage];
-      console.log('[FloatingChatbot] 전체 메시지:', newMessages);
-      // 메시지 추가 후 스크롤 다운
-      setTimeout(() => scrollToBottom(), 100);
-      return newMessages;
-    });
+    setMessages(prev => [...prev, userMessage]);
     setInputValue('');
     setIsLoading(true);
 
@@ -861,7 +771,7 @@ const FloatingChatbot = ({ page, onFieldUpdate, onComplete, onPageAction }) => {
     }
 
     // 페이지별 액션 처리
-    const pageAction = handlePageAction(messageToSend);
+    const pageAction = handlePageAction(inputValue);
     if (pageAction) {
       const actionMessage = {
         type: 'bot',
@@ -894,7 +804,7 @@ const FloatingChatbot = ({ page, onFieldUpdate, onComplete, onPageAction }) => {
           'Content-Type': 'application/json',
         },
         body: JSON.stringify({
-          user_input: messageToSend,
+          user_input: inputValue,
           conversation_history: conversationHistory, // 대화 기록 전송
           current_page: page, // 현재 페이지 컨텍스트 추가
           mode: "normal" // 기존 모드 유지
@@ -909,24 +819,13 @@ const FloatingChatbot = ({ page, onFieldUpdate, onComplete, onPageAction }) => {
 
       const data = await response.json();
       
-      console.log('[FloatingChatbot] 백엔드 응답:', data);
-      console.log('[FloatingChatbot] 응답 message:', data.message);
-      console.log('[FloatingChatbot] 응답 response:', data.response);
-      
       const botMessage = {
         type: 'bot',
-        content: data.message || data.response || '응답을 받지 못했습니다.',
-        timestamp: new Date(),
-        suggestions: data.suggestions || []
+        content: data.response,
+        timestamp: new Date()
       };
 
-      console.log('[FloatingChatbot] 봇 메시지 생성:', botMessage);
-      setMessages(prev => {
-        const newMessages = [...prev, botMessage];
-        // 봇 메시지 추가 후 스크롤 다운
-        setTimeout(() => scrollToBottom(), 100);
-        return newMessages;
-      });
+      setMessages(prev => [...prev, botMessage]);
     } catch (error) {
       console.error('챗봇 API 호출 실패:', error);
       const errorMessage = {
@@ -1012,7 +911,7 @@ const FloatingChatbot = ({ page, onFieldUpdate, onComplete, onPageAction }) => {
           borderRadius: '12px',
           boxShadow: '0 20px 60px rgba(0, 0, 0, 0.3)',
           width: '400px',
-          height: '80%',
+          height: '75%',
           display: 'flex',
           flexDirection: 'column',
           overflow: 'hidden',
@@ -1058,82 +957,30 @@ const FloatingChatbot = ({ page, onFieldUpdate, onComplete, onPageAction }) => {
                 gap: '16px',
                 minHeight: 0 
               }}>
-                {messages.map((message, index) => {
-                  console.log(`[FloatingChatbot] 메시지 렌더링 ${index}:`, message);
-                  return (
-                    <div
-                      key={index}
-                      style={{ 
-                        display: 'flex', 
-                        flexDirection: 'column',
-                        alignItems: message.type === 'user' ? 'flex-end' : 'flex-start',
-                        marginBottom: '8px'
-                      }}
-                    >
-                      <div style={{
-                        maxWidth: '280px',
-                        padding: '8px 16px',
-                        borderRadius: '8px',
-                        backgroundColor: message.type === 'user' ? '#2563eb' : '#f3f4f6',
-                        color: message.type === 'user' ? 'white' : '#1f2937',
-                        wordBreak: 'break-word'
-                      }}>
-                        <div style={{ fontSize: '14px', whiteSpace: 'pre-wrap', lineHeight: '1.4' }}>
-                          {message.content}
-                        </div>
-                        <div style={{ fontSize: '12px', opacity: 0.7, marginTop: '4px' }}>
-                          {message.timestamp.toLocaleTimeString()}
-                        </div>
+                {messages.map((message, index) => (
+                  <div
+                    key={index}
+                    style={{ 
+                      display: 'flex', 
+                      justifyContent: message.type === 'user' ? 'flex-end' : 'flex-start' 
+                    }}
+                  >
+                    <div style={{
+                      maxWidth: '280px',
+                      padding: '8px 16px',
+                      borderRadius: '8px',
+                      backgroundColor: message.type === 'user' ? '#2563eb' : '#f3f4f6',
+                      color: message.type === 'user' ? 'white' : '#1f2937'
+                    }}>
+                      <div style={{ fontSize: '14px', whiteSpace: 'pre-wrap' }}>
+                        {message.content}
                       </div>
-                      
-                      {/* 추천 리스트 표시 */}
-                      {message.type === 'bot' && message.suggestions && message.suggestions.length > 0 && (
-                        <div style={{
-                          marginTop: '8px',
-                          display: 'flex',
-                          flexWrap: 'wrap',
-                          gap: '4px',
-                          maxWidth: '280px'
-                        }}>
-                          {message.suggestions.map((suggestion, suggestionIndex) => (
-                            <button
-                              key={suggestionIndex}
-                              onClick={() => {
-                                console.log(`[FloatingChatbot] 추천 선택: ${suggestion}`);
-                                setInputValue(suggestion);
-                                // 선택된 추천을 즉시 전송
-                                setTimeout(() => {
-                                  sendMessage(suggestion);
-                                }, 100);
-                              }}
-                              style={{
-                                padding: '4px 8px',
-                                fontSize: '12px',
-                                backgroundColor: '#e5e7eb',
-                                color: '#374151',
-                                border: '1px solid #d1d5db',
-                                borderRadius: '4px',
-                                cursor: 'pointer',
-                                whiteSpace: 'nowrap',
-                                maxWidth: '100px',
-                                overflow: 'hidden',
-                                textOverflow: 'ellipsis'
-                              }}
-                              onMouseEnter={(e) => {
-                                e.currentTarget.style.backgroundColor = '#d1d5db';
-                              }}
-                              onMouseLeave={(e) => {
-                                e.currentTarget.style.backgroundColor = '#e5e7eb';
-                              }}
-                            >
-                              {suggestion}
-                            </button>
-                          ))}
-                        </div>
-                      )}
+                      <div style={{ fontSize: '12px', opacity: 0.7, marginTop: '4px' }}>
+                        {message.timestamp.toLocaleTimeString()}
+                      </div>
                     </div>
-                  );
-                })}
+                  </div>
+                ))}
 
                 {isLoading && (
                   <div style={{ display: 'flex', justifyContent: 'flex-start' }}>

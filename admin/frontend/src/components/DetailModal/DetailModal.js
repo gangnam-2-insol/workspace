@@ -58,36 +58,6 @@ const CloseButton = styled.button`
   }
 `;
 
-const HeaderActions = styled.div`
-  display: flex;
-  align-items: center;
-  gap: 12px;
-`;
-
-const OriginalViewButton = styled.button`
-  background: #3b82f6;
-  color: white;
-  border: none;
-  padding: 8px 16px;
-  border-radius: 6px;
-  font-size: 0.875rem;
-  font-weight: 500;
-  cursor: pointer;
-  transition: all 0.2s;
-  display: flex;
-  align-items: center;
-  gap: 6px;
-  
-  &:hover {
-    background: #2563eb;
-    transform: translateY(-1px);
-  }
-  
-  &:active {
-    transform: translateY(0);
-  }
-`;
-
 const ActionButtons = styled.div`
   display: flex;
   gap: 12px;
@@ -226,14 +196,9 @@ const DetailModal = ({
       <ModalContent onClick={(e) => e.stopPropagation()}>
         <ModalHeader>
           <ModalTitle>{title}</ModalTitle>
-          <HeaderActions>
-            <OriginalViewButton>
-              원본보기
-            </OriginalViewButton>
-            <CloseButton onClick={onClose}>
-              <FiX />
-            </CloseButton>
-          </HeaderActions>
+          <CloseButton onClick={onClose}>
+            <FiX />
+          </CloseButton>
         </ModalHeader>
         
         {children}
