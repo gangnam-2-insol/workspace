@@ -10,4 +10,5 @@ coverage
 .coverage
 .cache
 .DS_Store
-*.log 
+*.log
+build 

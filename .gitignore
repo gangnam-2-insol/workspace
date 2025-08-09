@@ -1,3 +1,4 @@
+@ -1,100 +1,2 @@
 # Dependencies
 node_modules/
 */node_modules/
@@ -98,3 +99,12 @@ Thumbs.db
 
 *.yml
 *.yaml
+
+# 모든 node_modules 폴더 무시
+node_modules/
+
+# 파이썬 캐시파일
+__pycache__/
+
+#가상환경폴더
+workspace/
