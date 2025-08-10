@@ -14,6 +14,7 @@ import UserManagement from './pages/UserManagement/UserManagement';
 import Settings from './pages/Settings/Settings';
 import FloatingChatbot from './components/FloatingChatbot';
 import AITooltip from './components/AITooltip';
+import LangGraphChatbot from './components/LangGraphChatbot';
 
 function App() {
   const location = useLocation();
@@ -172,6 +173,9 @@ function App() {
         }}
         onPageAction={handlePageAction}
       />
+
+      {/* LangGraph 채팅봇 컴포넌트 */}
+      <LangGraphChatbot />
     </>
   );
 }

@@ -14,6 +14,14 @@ import numpy as np # numpy 라이브러리 추가
 from gemini_service import GeminiService
 from resume_analyzer import extract_resume_info_from_text
 from agent_system import agent_system
+# LangGraph 시스템 다시 활성화
+try:
+    from langgraph_agent_system import langgraph_agent_system, LANGGRAPH_AVAILABLE
+    print("LangGraph 시스템을 다시 활성화했습니다.")
+except Exception as e:
+    print(f"LangGraph 시스템 로드 실패: {e}")
+    langgraph_agent_system = None
+    LANGGRAPH_AVAILABLE = False
 
 # 고급 NLP 라이브러리 추가
 try:
@@ -3638,7 +3646,7 @@ async def chat_endpoint(request: ChatbotRequest):
 
 @router.post("/test-mode-chat")
 async def test_mode_chat(request: ChatbotRequest):
-    """테스트중 모드 채팅 처리 - LangGraph 기반 Agent 시스템"""
+    """테스트중 모드 채팅 처리 - 기존 Agent 시스템"""
     try:
         # Agent 시스템을 사용하여 요청 처리
         result = agent_system.process_request(
@@ -3661,6 +3669,82 @@ async def test_mode_chat(request: ChatbotRequest):
         
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"테스트중 모드 처리 중 오류: {str(e)}")
+
+@router.post("/langgraph-chat")
+async def langgraph_chat(request: ChatbotRequest):
+    """LangGraph 기반 채팅 처리"""
+    try:
+        if not LANGGRAPH_AVAILABLE:
+            return ChatbotResponse(
+                message="❌ LangGraph 라이브러리가 설치되지 않았습니다. pip install langgraph로 설치해주세요.",
+                confidence=0.0
+            )
+        
+        if not langgraph_agent_system:
+            return ChatbotResponse(
+                message="❌ LangGraph Agent 시스템이 초기화되지 않았습니다.",
+                confidence=0.0
+            )
+        
+        # LangGraph Agent 시스템을 사용하여 요청 처리
+        result = await langgraph_agent_system.process_request(
+            user_input=request.user_input,
+            conversation_history=request.conversation_history
+        )
+        
+        if result["success"]:
+            # 메타데이터에서 워크플로우 추적 정보 추가
+            workflow_info = f"\n\n🔍 워크플로우 추적: {result.get('workflow_trace', 'N/A')}"
+            full_message = result["response"] + workflow_info
+            
+            response = ChatbotResponse(
+                message=full_message,
+                confidence=0.95
+            )
+        else:
+            response = ChatbotResponse(
+                message=result["response"],
+                confidence=0.1
+            )
+        
+        return response
+        
+    except Exception as e:
+        print(f"[ERROR] langgraph-chat 오류: {str(e)}")
+        traceback.print_exc()
+        raise HTTPException(status_code=500, detail=f"LangGraph 채팅 처리 중 오류가 발생했습니다: {str(e)}")
+
+@router.get("/langgraph-info")
+async def get_langgraph_info():
+    """LangGraph 시스템 정보 반환"""
+    try:
+        if not LANGGRAPH_AVAILABLE:
+            return {
+                "available": False,
+                "message": "LangGraph 라이브러리가 설치되지 않았습니다."
+            }
+        
+        if not langgraph_agent_system:
+            return {
+                "available": False,
+                "message": "LangGraph Agent 시스템이 초기화되지 않았습니다."
+            }
+        
+        workflow_info = langgraph_agent_system.get_workflow_info()
+        
+        return {
+            "available": True,
+            "message": "LangGraph 시스템이 정상적으로 작동 중입니다.",
+            "workflow_info": workflow_info,
+            "nodes": workflow_info["nodes"],
+            "edges": workflow_info["edges"]
+        }
+        
+    except Exception as e:
+        return {
+            "available": False,
+            "message": f"LangGraph 정보 조회 중 오류: {str(e)}"
+        }
 
 @router.post("/generate-title")
 async def generate_title_recommendations(request: dict):
