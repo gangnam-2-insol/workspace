@@ -13,6 +13,7 @@ import google.generativeai as genai
 import numpy as np # numpy 라이브러리 추가
 from gemini_service import GeminiService
 from resume_analyzer import extract_resume_info_from_text
+from agent_system import agent_system
 
 # 고급 NLP 라이브러리 추가
 try:
@@ -545,75 +546,18 @@ async def extract_job_info_from_text_llm(text: str) -> dict:
         return {}
 
 
-def match_field_by_keyword(text: str) -> dict:
-    """
-    항목명 키워드로 필드를 매칭하여 값을 추출
-    예: "마감일 9월 12일까지" → {"deadline": "9월 12일까지"}
-    """
-    import re
-    
-    # 필드 매칭 규칙 정의
-    field_patterns = {
-        'deadline': ['마감일', '마감', '접수마감', '지원마감', '모집마감', '기한'],
-        'department': ['부서', '팀', '조직', '직책', '포지션'],
-        'headcount': ['인원', '명수', '채용인원', '모집인원', '채용명수'],
-        'locationCity': ['지역', '위치', '근무지', '소재지', '근무위치'],
-        'salary': ['연봉', '급여', '임금', '월급', '연수입', '보수'],
-        'workHours': ['근무시간', '업무시간', '근무시각', '출퇴근시간'],
-        'workDays': ['근무요일', '근무일', '출근일', '업무요일'],
-        'experience': ['경력', '경험', '신입', '신규', '기존'],
-        'mainDuties': ['업무', '담당업무', '주요업무', '업무내용', '직무'],
-        'contactEmail': ['이메일', '메일', '연락처', '담당자이메일', '담당자메일']
-    }
-    
-    result = {}
-    
-    for field_key, keywords in field_patterns.items():
-        for keyword in keywords:
-            # "키워드 값" 패턴 매칭
-            pattern = rf"{keyword}\s*[:\-은는이가를을]\s*(.+?)(?:\s|$|,|\.)"
-            match = re.search(pattern, text)
-            if match:
-                value = match.group(1).strip()
-                # 불필요한 접속사 제거
-                value = re.sub(r'^(은|는|이|가|를|을|와|과|로|으로)\s*', '', value)
-                result[field_key] = value
-                print(f"[DEBUG] 항목명 매칭 성공: {keyword} → {field_key} = {value}")
-                break
-            
-            # "키워드 값" 패턴 (띄어쓰기만 있는 경우)
-            pattern2 = rf"{keyword}\s+([^\s,\.]+(?:\s+[^\s,\.]+)*)"
-            match2 = re.search(pattern2, text)
-            if match2:
-                value = match2.group(1).strip()
-                # 다른 키워드가 아닌지 확인
-                all_keywords = [kw for kws in field_patterns.values() for kw in kws]
-                if value not in all_keywords:
-                    result[field_key] = value
-                    print(f"[DEBUG] 항목명 매칭 성공 (공백패턴): {keyword} → {field_key} = {value}")
-                    break
-    
-    return result
-
 def extract_job_info_from_text(text: str, use_llm: bool = True) -> dict:
     """
     자유 텍스트에서 채용 정보를 추출하는 함수
     JSON 키-값 쌍으로 반환하여 폼 필드와 직접 매칭
-    1) 항목명 키워드 매칭 (새로 추가)
-    2) LLM 컨텍스트 기반 추출(가능 시)
-    3) 룰 기반 보완
+    1) LLM 컨텍스트 기반 추출(가능 시)
+    2) 룰 기반 보완
     """
     text_lower = text.lower()
     extracted_data = {}
     extracted_info = []  # extracted_info 변수 초기화 추가
     
     print(f"[DEBUG] extract_job_info_from_text 시작 - 입력: {text}")
-    
-    # 0) 항목명 키워드 매칭 우선 실행
-    keyword_matched = match_field_by_keyword(text)
-    if keyword_matched:
-        extracted_data.update(keyword_matched)
-        print(f"[DEBUG] 항목명 키워드 매칭 결과: {keyword_matched}")
     
     # 1) LLM 컨텍스트 기반 추출 선시도
     #    - 동기 컨텍스트에서만 실행하고, 이벤트 루프가 이미 돌고 있으면 건너뜀 (런타임 충돌 방지)
@@ -3534,37 +3478,21 @@ async def chat_endpoint(request: ChatbotRequest):
                 print("[DEBUG] /chat 자율모드 기타항목 선택 응답:", response)
                 return response
             
-            # JSON 데이터를 문자열로 변환 (키워드 매칭 결과 포함)
+            # JSON 데이터를 문자열로 변환
             extracted_info_text = ""
             if extracted_data:
-                # 필드명 한국어 매핑 (키워드 매칭 결과 포함)
-                field_name_mapping = {
-                    # 기존 한국어 키
-                    '부서': '부서',
-                    '인원': '인원', 
-                    '지역': '지역',
-                    '근무시간': '근무시간',
-                    '근무요일': '근무요일',
-                    '경력': '경력',
-                    '연봉': '연봉',
-                    '업무': '업무',
-                    # 새로 추가된 영어 키 (키워드 매칭 결과)
-                    'deadline': '마감일',
-                    'department': '부서',
-                    'headcount': '인원',
-                    'locationCity': '지역',
-                    'salary': '연봉',
-                    'workHours': '근무시간',
-                    'workDays': '근무요일',
-                    'experience': '경력',
-                    'mainDuties': '업무',
-                    'contactEmail': '이메일'
-                }
-                
                 for key, value in extracted_data.items():
-                    if value:  # 값이 있는 경우만 표시
-                        field_name = field_name_mapping.get(key, key)
-                        extracted_info_text += f"• {field_name}: {value}\n"
+                    field_name = {
+                        '부서': '부서',
+                        '인원': '인원',
+                        '지역': '지역',
+                        '근무시간': '근무시간',
+                        '근무요일': '근무요일',
+                        '경력': '경력',
+                        '연봉': '연봉',
+                        '업무': '업무'
+                    }.get(key, key)
+                    extracted_info_text += f"• {field_name}: {value}\n"
             
             if extracted_data and extracted_info_text:
                 # 작성 완료 요청인지 확인
@@ -3707,6 +3635,32 @@ async def chat_endpoint(request: ChatbotRequest):
         print(f"[ERROR] /chat 예외: {e}")
         traceback.print_exc()
         raise HTTPException(status_code=500, detail=f"처리 중 오류가 발생했습니다: {str(e)}")
+
+@router.post("/test-mode-chat")
+async def test_mode_chat(request: ChatbotRequest):
+    """테스트중 모드 채팅 처리 - LangGraph 기반 Agent 시스템"""
+    try:
+        # Agent 시스템을 사용하여 요청 처리
+        result = agent_system.process_request(
+            user_input=request.user_input,
+            conversation_history=request.conversation_history
+        )
+        
+        if result["success"]:
+            response = ChatbotResponse(
+                message=result["response"],
+                confidence=0.9
+            )
+        else:
+            response = ChatbotResponse(
+                message="죄송합니다. 테스트중 모드에서 오류가 발생했습니다.",
+                confidence=0.5
+            )
+        
+        return response
+        
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"테스트중 모드 처리 중 오류: {str(e)}")
 
 @router.post("/generate-title")
 async def generate_title_recommendations(request: dict):

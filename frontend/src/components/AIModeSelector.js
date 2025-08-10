@@ -1,6 +1,6 @@
 import React from 'react';
 
-const AIModeSelector = ({ onModeSelect, selectedMode }) => {
+const AIModeSelector = ({ onModeSelect, selectedMode, onTestModeClick }) => {
   const modes = [
     {
       id: 'individual_input',
@@ -189,6 +189,43 @@ const AIModeSelector = ({ onModeSelect, selectedMode }) => {
           이제 채용공고 작성을 시작할 수 있습니다!
         </div>
       )}
+      
+      {/* 테스트중 버튼 추가 */}
+      <div style={{
+        marginTop: '16px',
+        display: 'flex',
+        justifyContent: 'center'
+      }}>
+        <div
+          onClick={onTestModeClick}
+          style={{
+            padding: '8px 16px',
+            backgroundColor: '#fef3c7',        // 연한 노란색 배경
+            color: '#92400e',                  // 진한 주황색 텍스트
+            borderRadius: '20px',              // 둥근 모서리
+            border: '2px solid #f59e0b',       // 주황색 테두리
+            cursor: 'pointer',
+            transition: 'all 0.3s ease',       // 부드러운 애니메이션
+            boxShadow: '0 1px 4px rgba(0, 0, 0, 0.1)',
+            fontSize: '12px',
+            fontWeight: '600',
+            display: 'flex',
+            alignItems: 'center',
+            gap: '6px'
+          }}
+          onMouseEnter={(e) => {
+            e.target.style.transform = 'translateY(-1px)';
+            e.target.style.boxShadow = '0 2px 8px rgba(0, 0, 0, 0.15)';
+          }}
+          onMouseLeave={(e) => {
+            e.target.style.transform = 'translateY(0)';
+            e.target.style.boxShadow = '0 1px 4px rgba(0, 0, 0, 0.1)';
+          }}
+        >
+          <span style={{ fontSize: '14px' }}>🧪</span>
+          테스트중
+        </div>
+      </div>
     </div>
   );
 };

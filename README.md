@@ -2,7 +2,7 @@
 
 ## 📋 프로젝트 개요
 
-AI 기반 채용 관리 시스템으로, 지능형 채팅봇을 통한 자연어 입력으로 채용공고 작성, 이력서 분석, 포트폴리오 분석 등을 지원합니다. **Gemini AI**와 **FastAPI**, **React**를 기반으로 구축된 현대적인 웹 애플리케이션입니다.
+AI 기반 채용 관리 시스템으로, 지능형 채팅봇을 통한 자연어 입력으로 채용공고 작성, 이력서 분석, 포트폴리오 분석 등을 지원합니다. **Gemini AI**, **Agent 시스템**, **FastAPI**, **React**를 기반으로 구축된 현대적인 웹 애플리케이션입니다.
 
 ## 🚀 주요 기능
 
@@ -12,20 +12,526 @@ AI 기반 채용 관리 시스템으로, 지능형 채팅봇을 통한 자연어
 - **이미지 기반 등록**: AI가 생성한 이미지와 함께 채용공고 작성
 - **🧪 테스트 자동입력**: 개발 및 테스트용 샘플 데이터 원클릭 입력
 
-### 🏷️ 2. AI 제목 추천 시스템
+### 🧪 2. Agent 기반 시스템 (테스트중 모드)
+- **의도 자동 분류**: 사용자 요청을 "search", "calc", "db", "chat" 중 하나로 자동 분류
+- **도구 자동 선택**: 의도에 따라 적절한 도구(검색, 계산, DB 조회, 대화) 자동 선택
+- **모듈화된 노드**: 각 도구가 독립적인 노드로 구성되어 확장성과 유지보수성 향상
+- **조건부 분기**: Agent 시스템의 조건부 분기를 통한 지능적인 워크플로우 관리
+
+### 🏷️ 3. AI 제목 추천 시스템
 - **4가지 컨셉**: 신입친화형, 전문가형, 일반형, 일반형 변형
 - **매번 다른 추천**: 랜덤 시드와 창의성 설정으로 다양한 제목 생성
 - **Gemini AI 기반**: 고도화된 자연어 처리로 매력적인 제목 생성
 
-### 💬 3. 지능형 대화 관리
+### 💬 4. 지능형 대화 관리
 - **대화 흐름 제어**: 순서가 꼬여도 🔄 처음부터 버튼으로 재시작 가능
 - **세션 기반 히스토리**: 24시간 내 대화 기록 자동 복원
 - **실시간 필드 업데이트**: 입력과 동시에 폼 필드 자동 반영
 
-### 📝 4. 범용적인 JSON 매핑 시스템
+### 📝 5. 범용적인 JSON 매핑 시스템
 - 채팅 응답을 JSON으로 처리하여 UI 필드에 자동 매핑
 - 페이지별 필드 매핑 설정 지원
 - 다양한 응답 형식 지원 (extracted_data, field/value, content 내 JSON)
+
+## 🧪 Agent 기반 시스템 상세 가이드
+
+### 📋 Agent 시스템 개요
+
+Agent 시스템을 활용한 지능형 시스템으로, 사용자의 요청을 분석하고 적절한 도구를 자동으로 선택하여 처리합니다.
+
+#### 🎯 주요 특징
+- **의도 자동 분류**: Gemini AI를 활용한 사용자 요청 의도 분석
+- **도구 자동 선택**: 의도에 따른 적절한 도구 자동 선택
+- **모듈화된 구조**: 각 도구가 독립적인 노드로 구성
+- **확장 가능**: 새로운 도구를 쉽게 추가 가능
+- **오류 처리**: 각 단계별 예외 처리 및 폴백
+
+### 🏗️ Agent 시스템 아키텍처
+
+```mermaid
+graph TD
+    A[사용자 입력] --> B[의도 분류 노드]
+    B --> C{의도 분석}
+    C -->|search| D[웹 검색 노드]
+    C -->|calc| E[계산 노드]
+    C -->|db| F[DB 조회 노드]
+    C -->|chat| G[일반 대화 노드]
+    
+    D --> H[응답 포매터]
+    E --> H
+    F --> H
+    G --> H
+    
+    H --> I[최종 응답]
+```
+
+### 🔧 Agent 노드 상세 설명
+
+#### 1️⃣ **IntentDetectionNode (의도 분류 노드)**
+```python
+class IntentDetectionNode:
+    """사용자 의도를 파악하는 노드"""
+    
+    def detect_intent(self, user_input: str) -> str:
+        # Gemini AI를 사용하여 사용자 요청을 4가지 카테고리로 분류:
+        # - "search": 정보 검색, 조사, 찾기 관련 요청
+        # - "calc": 계산, 수식, 수치 처리 관련 요청  
+        # - "db": 데이터베이스 조회, 저장된 정보 검색
+        # - "chat": 일반적인 대화, 질문, 도움 요청
+```
+
+**분류 예시:**
+- "최신 개발 트렌드 알려줘" → `search`
+- "연봉 4000만원의 월급" → `calc`
+- "저장된 채용공고 보여줘" → `db`
+- "안녕하세요" → `chat`
+
+#### 2️⃣ **WebSearchNode (웹 검색 도구 노드)**
+```python
+class WebSearchNode:
+    """웹 검색 도구 노드"""
+    
+    def process_search(self, search_query: str) -> str:
+        # 시뮬레이션된 검색 결과 제공
+        # 실제 구현 시 Google Custom Search API, Bing Search API 등 연동 가능
+        
+        if "개발" in search_query:
+            result = "🔍 최신 개발 트렌드:\n• React 18의 새로운 기능\n• TypeScript 5.0 업데이트\n• AI 기반 코드 생성 도구"
+        elif "채용" in search_query:
+            result = "💼 채용 관련 정보:\n• 2024년 IT 업계 채용 동향\n• 개발자 평균 연봉 정보"
+```
+
+#### 3️⃣ **CalculatorNode (계산 도구 노드)**
+```python
+class CalculatorNode:
+    """계산 도구 노드"""
+    
+    def process_calculation(self, user_input: str) -> str:
+        # 수식 계산 및 텍스트 기반 계산 지원
+        
+        # 수식 계산: "2+2" → "🧮 계산 결과: 2+2 = 4"
+        # 연봉 변환: "연봉 4000만원의 월급" → "💰 연봉 4,000만원의 월급은 약 333만원입니다."
+```
+
+#### 4️⃣ **DatabaseQueryNode (DB 조회 도구 노드)**
+```python
+class DatabaseQueryNode:
+    """데이터베이스 조회 도구 노드"""
+    
+    def process_db_query(self, user_input: str) -> str:
+        # 시뮬레이션된 DB 조회 결과 제공
+        
+        if "채용공고" in user_input:
+            result = """📋 저장된 채용공고 목록:
+            1. 🏢 ABC테크 - 프론트엔드 개발자
+            2. 🏢 XYZ소프트 - 백엔드 개발자
+            3. 🏢 DEF시스템 - 풀스택 개발자"""
+```
+
+#### 5️⃣ **FallbackNode (일반 대화 처리 노드)**
+```python
+class FallbackNode:
+    """일반 대화 처리 노드"""
+    
+    def process_chat(self, user_input: str) -> str:
+        # Gemini AI를 사용한 일반적인 대화 처리
+        # 채용 관련 질문이면 전문적인 조언 제공
+        # 일반적인 질문이면 친근하게 답변
+```
+
+#### 6️⃣ **ResponseFormatterNode (응답 포매터 노드)**
+```python
+class ResponseFormatterNode:
+    """응답 포매터 노드"""
+    
+    def format_response(self, tool_result: str, intent: str, error: str = "") -> str:
+        # 도구 결과를 사용자 친화적으로 포맷팅
+        # 오류 처리 및 최종 응답 생성
+```
+
+### 🔄 Agent 시스템 워크플로우
+
+#### 1단계: 의도 분류
+```python
+# 사용자 입력: "최신 개발 트렌드 알려줘"
+# IntentDetectionNode가 "search"로 분류
+```
+
+#### 2단계: 도구 선택
+```python
+# 조건부 분기에 따라 WebSearchNode로 분기
+if intent == "search":
+    tool_result = self.web_search.process_search(user_input)
+elif intent == "calc":
+    tool_result = self.calculator.process_calculation(user_input)
+elif intent == "db":
+    tool_result = self.db_query.process_db_query(user_input)
+else:  # chat
+    tool_result = self.fallback.process_chat(user_input)
+```
+
+#### 3단계: 도구 실행
+```python
+# WebSearchNode에서 검색 결과 생성
+tool_result = "🔍 최신 개발 트렌드:\n• React 18의 새로운 기능\n• TypeScript 5.0 업데이트"
+```
+
+#### 4단계: 응답 포맷팅
+```python
+# ResponseFormatterNode에서 최종 응답 생성
+final_response = f"{tool_result}\n\n💡 추가 질문이 있으시면 언제든 말씀해주세요!"
+```
+
+### 🛠️ Agent 시스템 구현 코드
+
+#### 백엔드 구현 (agent_system.py)
+```python
+class AgentSystem:
+    """기본 Agent 시스템"""
+    
+    def __init__(self):
+        self.intent_detector = IntentDetectionNode()
+        self.web_search = WebSearchNode()
+        self.calculator = CalculatorNode()
+        self.db_query = DatabaseQueryNode()
+        self.fallback = FallbackNode()
+        self.formatter = ResponseFormatterNode()
+        
+    def process_request(self, user_input: str, conversation_history: List[Dict[str, str]] = None) -> Dict[str, Any]:
+        """사용자 요청을 처리하고 결과를 반환합니다."""
+        try:
+            # 1단계: 의도 분류
+            intent = self.intent_detector.detect_intent(user_input)
+            
+            # 2단계: 도구 선택 및 실행
+            if intent == "search":
+                tool_result = self.web_search.process_search(user_input)
+            elif intent == "calc":
+                tool_result = self.calculator.process_calculation(user_input)
+            elif intent == "db":
+                tool_result = self.db_query.process_db_query(user_input)
+            else:  # chat
+                tool_result = self.fallback.process_chat(user_input)
+            
+            # 3단계: 응답 포맷팅
+            final_response = self.formatter.format_response(tool_result, intent)
+            
+            return {
+                "success": True,
+                "response": final_response,
+                "intent": intent
+            }
+            
+        except Exception as e:
+            return {
+                "success": False,
+                "response": f"죄송합니다. 요청 처리 중 오류가 발생했습니다: {str(e)}",
+                "intent": "error"
+            }
+```
+
+#### API 엔드포인트 (chatbot_router.py)
+```python
+@router.post("/test-mode-chat")
+async def test_mode_chat(request: ChatbotRequest):
+    """테스트중 모드 채팅 처리"""
+    try:
+        # Agent 시스템을 사용하여 요청 처리
+        result = agent_system.process_request(
+            user_input=request.user_input,
+            conversation_history=request.conversation_history
+        )
+        
+        if result["success"]:
+            response = ChatbotResponse(
+                message=result["response"],
+                confidence=0.9
+            )
+        else:
+            response = ChatbotResponse(
+                message="죄송합니다. 테스트중 모드에서 오류가 발생했습니다.",
+                confidence=0.5
+            )
+        
+        return response
+        
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"테스트중 모드 처리 중 오류: {str(e)}")
+```
+
+#### 프론트엔드 구현 상세
+
+##### 1. 테스트중 버튼 UI 구현 (AIModeSelector.js)
+```javascript
+// 위치: frontend/src/components/AIModeSelector.js
+// 테스트중 버튼이 자율모드 버튼 아래에 추가됨
+
+{/* 테스트중 버튼 추가 */}
+<div style={{
+  marginTop: '16px',
+  display: 'flex',
+  justifyContent: 'center'
+}}>
+  <div
+    onClick={onTestModeClick}
+    style={{
+      padding: '8px 16px',
+      backgroundColor: '#fef3c7',        // 연한 노란색 배경
+      color: '#92400e',                  // 진한 주황색 텍스트
+      borderRadius: '20px',              // 둥근 모서리
+      border: '2px solid #f59e0b',       // 주황색 테두리
+      cursor: 'pointer',
+      transition: 'all 0.3s ease',       // 부드러운 애니메이션
+      boxShadow: '0 1px 4px rgba(0, 0, 0, 0.1)',
+      fontSize: '12px',
+      fontWeight: '600',
+      display: 'flex',
+      alignItems: 'center',
+      gap: '6px'
+    }}
+    onMouseEnter={(e) => {
+      e.target.style.transform = 'translateY(-1px)';
+      e.target.style.boxShadow = '0 2px 8px rgba(0, 0, 0, 0.15)';
+    }}
+    onMouseLeave={(e) => {
+      e.target.style.transform = 'translateY(0)';
+      e.target.style.boxShadow = '0 1px 4px rgba(0, 0, 0, 0.1)';
+    }}
+  >
+    <span style={{ fontSize: '14px' }}>🧪</span>
+    테스트중
+  </div>
+</div>
+```
+
+**버튼 위치 및 스타일 특징:**
+- **위치**: AI 어시스턴트 모달 내 자율모드 버튼 바로 아래
+- **색상**: 노란색 배경 (#fef3c7) + 주황색 테두리 (#f59e0b)
+- **아이콘**: 🧪 (실험관 이모지)
+- **호버 효과**: 마우스 오버 시 위로 살짝 올라가는 애니메이션
+- **크기**: 기존 모드 버튼들과 동일한 크기와 폰트
+
+##### 2. 테스트중 모드 핸들러 (EnhancedModalChatbot.js)
+```javascript
+// 위치: frontend/src/components/EnhancedModalChatbot.js
+
+// 테스트중 모드 클릭 핸들러
+const handleTestModeClick = () => {
+  setSelectedAIMode('test_mode');
+  setShowModeSelector(false);
+  
+  const testModeMessage = {
+    type: 'bot',
+    content: '🧪 테스트중 모드를 시작합니다!\n\nAgent 기반 시스템으로 다양한 도구를 자동으로 선택하여 답변합니다.\n\n다음과 같은 요청을 해보세요:\n• "최신 개발 트렌드 알려줘" (검색)\n• "연봉 4000만원의 월급" (계산)\n• "저장된 채용공고 보여줘" (DB 조회)\n• "안녕하세요" (일반 대화)',
+    timestamp: new Date(),
+    id: `mode-test_mode-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`
+  };
+  
+  setMessages([testModeMessage]);
+};
+
+// 테스트중 모드 API 호출
+if (selectedAIMode === 'test_mode') {
+  const testResponse = await fetch('/api/chatbot/test-mode-chat', {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+    },
+    body: JSON.stringify({
+      user_input: userInput,
+      conversation_history: messagesRef.current.map(msg => ({
+        role: msg.type === 'user' ? 'user' : 'assistant',
+        content: msg.content
+      }))
+    })
+  });
+
+  const testData = await testResponse.json();
+  data = testData; // 기존 data 변수를 테스트중 모드 응답으로 덮어쓰기
+}
+```
+
+##### 3. 컴포넌트 연결 구조
+```javascript
+// EnhancedModalChatbot.js에서 AIModeSelector에 props 전달
+<AIModeSelector
+  onIndividualModeClick={handleIndividualModeClick}
+  onAutonomousModeClick={handleAutonomousModeClick}
+  onAIAssistantModeClick={handleAIAssistantModeClick}
+  onTestModeClick={handleTestModeClick}  // 새로 추가된 prop
+/>
+```
+
+### 🎯 테스트중 모드 사용 방법
+
+#### 1. 모드 선택
+- **위치**: AI 어시스턴트 모달 내 자율모드 버튼 바로 아래
+- **버튼 스타일**: 🧪 테스트중 (노란색 배경, 주황색 테두리)
+- **클릭 시**: Agent 기반 시스템 활성화
+- **시각적 피드백**: 호버 시 위로 살짝 올라가는 애니메이션 효과
+
+#### 2. 테스트 요청 예시
+
+**🔍 검색 요청:**
+```
+사용자: "최신 개발 트렌드 알려줘"
+Agent: "🔍 최신 개발 트렌드:
+
+📱 프론트엔드:
+• React 18의 새로운 기능 (Concurrent Features, Suspense)
+• TypeScript 5.0 업데이트 및 개선사항
+• Next.js 14의 App Router와 Server Components
+• Vue 3의 Composition API 활용
+
+⚙️ 백엔드:
+• Node.js 20의 새로운 기능
+• Python 3.12의 성능 개선
+• Go 1.21의 병렬 처리 개선
+• Rust의 메모리 안전성
+
+🤖 AI/ML:
+• AI 기반 코드 생성 도구 (GitHub Copilot, Cursor)
+• 머신러닝 모델 최적화 기술
+• 자연어 처리 발전
+
+💡 더 구체적인 정보가 필요하시면 말씀해주세요!"
+```
+
+**🧮 계산 요청:**
+```
+사용자: "연봉 4000만원의 월급"
+Agent: "💰 연봉 4,000만원의 월급 계산:
+
+📊 기본 정보:
+• 연봉: 4,000만원
+• 월급: 333만원
+
+💸 공제 후 실수령액:
+• 4대보험 공제 (약 10%): 33만원
+• 실수령액: 300만원
+
+💡 참고사항:
+• 정확한 공제액은 개인 상황에 따라 다를 수 있습니다
+• 퇴직연금, 각종 수당 등이 추가될 수 있습니다
+• 세금 계산은 연말정산 시 정확히 계산됩니다
+
+🧮 다른 계산이 필요하시면 언제든 말씀해주세요!"
+```
+
+**📋 DB 조회 요청:**
+```
+사용자: "저장된 채용공고 보여줘"
+Agent: "📋 저장된 채용공고 목록:
+
+1. 🏢 ABC테크 - 프론트엔드 개발자
+   • 위치: 서울 강남구
+   • 연봉: 4,000만원 ~ 6,000만원
+   • 경력: 2년 이상
+   • 상태: 모집중
+   • 등록일: 2024-08-01
+
+2. 🏢 XYZ소프트 - 백엔드 개발자  
+   • 위치: 인천 연수구
+   • 연봉: 3,500만원 ~ 5,500만원
+   • 경력: 1년 이상
+   • 상태: 모집중
+   • 등록일: 2024-07-28
+
+📊 통계:
+• 총 등록 공고: 5개
+• 평균 연봉: 4,220만원
+• 가장 인기 지역: 서울 (2개)
+• 가장 인기 직종: 개발자 (3개)
+
+📋 다른 데이터 조회가 필요하시면 말씀해주세요!"
+```
+
+**💬 일반 대화:**
+```
+사용자: "안녕하세요"
+Agent: "안녕하세요! 👋 무엇을 도와드릴까요? 채용 관련 질문이나 일반적인 대화 모두 환영합니다! 😊
+
+💬 추가 질문이 있으시면 언제든 말씀해주세요!"
+```
+
+### 🔧 Agent 시스템 확장 방법
+
+#### 새로운 도구 추가
+
+1. **새로운 노드 클래스 생성**
+```python
+class NewToolNode:
+    """새로운 도구 노드"""
+    
+    def process_new_tool(self, user_input: str) -> str:
+        try:
+            # 새로운 도구 로직 구현
+            result = self.process_request(user_input)
+            return result
+        except Exception as e:
+            return f"새로운 도구 처리 중 오류: {str(e)}"
+    
+    def process_request(self, user_input: str) -> str:
+        # 실제 도구 로직 구현
+        return f"새로운 도구 결과: {user_input}"
+```
+
+2. **의도 분류에 새로운 카테고리 추가**
+```python
+# IntentDetectionNode의 system_prompt 수정
+self.system_prompt = """
+다음 카테고리 중 하나로 분류해주세요:
+
+1. "search" - 정보 검색, 조사, 찾기 관련 요청
+2. "calc" - 계산, 수식, 수치 처리 관련 요청
+3. "db" - 데이터베이스 조회, 저장된 정보 검색
+4. "new_tool" - 새로운 도구 관련 요청  # 추가
+5. "chat" - 일반적인 대화, 질문, 도움 요청
+
+분류 결과만 반환해주세요 (예: "search", "calc", "db", "new_tool", "chat")
+"""
+```
+
+3. **Agent 시스템에 새로운 도구 추가**
+```python
+class AgentSystem:
+    def __init__(self):
+        # 기존 노드들...
+        self.new_tool = NewToolNode()
+        
+    def process_request(self, user_input: str, conversation_history: List[Dict[str, str]] = None) -> Dict[str, Any]:
+        try:
+            intent = self.intent_detector.detect_intent(user_input)
+            
+            if intent == "search":
+                tool_result = self.web_search.process_search(user_input)
+            elif intent == "calc":
+                tool_result = self.calculator.process_calculation(user_input)
+            elif intent == "db":
+                tool_result = self.db_query.process_db_query(user_input)
+            elif intent == "new_tool":  # 추가
+                tool_result = self.new_tool.process_new_tool(user_input)
+            else:  # chat
+                tool_result = self.fallback.process_chat(user_input)
+```
+
+### 🎯 Agent 시스템의 장점
+
+1. **🧠 지능적 의도 분류**: Gemini AI를 활용한 정확한 의도 분석
+2. **🔧 모듈화된 구조**: 각 도구가 독립적인 노드로 구성되어 유지보수 용이
+3. **📈 확장성**: 새로운 도구를 쉽게 추가 가능
+4. **🔄 조건부 분기**: Agent 시스템의 강력한 워크플로우 관리
+5. **🛡️ 오류 처리**: 각 단계별 예외 처리 및 폴백
+6. **⚡ 실시간 처리**: 사용자 요청에 대한 즉시 응답
+7. **🎨 사용자 친화적**: 도구 결과를 사용자가 이해하기 쉽게 포맷팅
+
+### 🔮 향후 발전 방향
+
+1. **실제 API 연동**: Google Custom Search API, 실제 DB 연동
+2. **더 많은 도구**: 파일 처리, 이미지 분석, 코드 생성 등
+3. **학습 기능**: 사용자 패턴 학습을 통한 개인화
+4. **멀티모달 지원**: 이미지, 음성 입력 처리
+5. **병렬 처리**: 여러 도구 동시 실행 지원
 
 ## 🤖 채용공고 페이지 AI 기능 완전 가이드
 
@@ -208,6 +714,7 @@ graph TD
 - **Frontend**: React 18, Styled Components, Framer Motion
 - **Backend**: FastAPI, Python 3.9+
 - **AI Engine**: Google Gemini AI (gemini-1.5-pro)
+- **Agent Framework**: LangGraph, LangChain
 - **Database**: MongoDB
 - **UI/UX**: 반응형 디자인, 다크모드 지원
 
@@ -229,7 +736,13 @@ admin/backend/
 admin/frontend/src/
 ├── components/
 │   ├── EnhancedModalChatbot.js        # AI 채팅 컴포넌트 (3,000+ 라인)
+│   │                                   # - 테스트중 모드 핸들러 포함
+│   │                                   # - LangGraph Agent API 호출
+│   │                                   # - 모드별 응답 처리
 │   ├── AIModeSelector.js              # AI 모드 선택기
+│   │                                   # - 🧪 테스트중 버튼 UI 구현
+│   │                                   # - 자율모드 버튼 아래 위치
+│   │                                   # - 노란색 배경 + 주황색 테두리
 │   ├── TitleRecommendationModal.js    # 제목 추천 모달
 │   ├── TestAutoFillButton.js          # 테스트 자동입력 버튼
 │   ├── ChatbotRestartButton.js        # 대화 재시작 버튼
@@ -416,7 +929,7 @@ REACT_APP_API_URL=http://localhost:8000
 ### 3. 백엔드 서버 실행
 ```bash
 # 의존성 설치
-pip install fastapi uvicorn python-multipart google-generativeai motor pymongo
+pip install fastapi uvicorn python-multipart google-generativeai motor pymongo langgraph langchain langchain-openai langchain-google-genai requests
 
 # 서버 실행 (포트 8000)
 cd admin/backend
@@ -494,9 +1007,13 @@ if request.current_page == "new_page":
 7. **🔒 세션 관리**: 24시간 대화 기록 보존 및 복원
 8. **⚙️ 모듈화**: 컴포넌트 기반으로 쉬운 확장과 유지보수
 
-## ✨ 최신 업데이트 (v2.0)
+## ✨ 최신 업데이트 (v2.1)
 
 ### 🆕 새로운 기능
+- **🧪 LangGraph 기반 Agent 시스템**: 의도 자동 분류 및 도구 자동 선택
+- **테스트중 모드**: 다양한 도구(검색, 계산, DB 조회, 대화)를 자동으로 선택하여 처리
+- **모듈화된 노드 구조**: 각 도구가 독립적인 노드로 구성되어 확장성과 유지보수성 향상
+- **조건부 분기 워크플로우**: LangGraph의 조건부 엣지를 통한 지능적인 처리 흐름
 - **AI 제목 추천**: 4가지 컨셉으로 매번 다른 창의적 제목 생성
 - **테스트 자동입력**: 🧪 버튼으로 원클릭 샘플 데이터 입력
 - **대화 재시작**: 🔄 처음부터 버튼으로 꼬인 대화 흐름 복구
@@ -517,7 +1034,33 @@ if request.current_page == "new_page":
 
 ### 🔧 주요 컴포넌트 사용법
 
-#### 1. 테스트 자동입력 사용
+#### 1. 테스트중 버튼 UI 커스터마이징
+```javascript
+// AIModeSelector.js에서 버튼 스타일 수정
+const testModeButtonStyle = {
+  padding: '8px 16px',
+  backgroundColor: '#fef3c7',        // 배경색 변경 가능
+  color: '#92400e',                  // 텍스트 색상 변경 가능
+  borderRadius: '20px',
+  border: '2px solid #f59e0b',       // 테두리 색상 변경 가능
+  cursor: 'pointer',
+  transition: 'all 0.3s ease',
+  boxShadow: '0 1px 4px rgba(0, 0, 0, 0.1)',
+  fontSize: '12px',
+  fontWeight: '600',
+  display: 'flex',
+  alignItems: 'center',
+  gap: '6px'
+};
+
+// 호버 효과 커스터마이징
+onMouseEnter={(e) => {
+  e.target.style.transform = 'translateY(-2px)';  // 올라가는 높이 조정
+  e.target.style.boxShadow = '0 4px 12px rgba(0, 0, 0, 0.2)';  // 그림자 강화
+}}
+```
+
+#### 2. 테스트 자동입력 사용
 ```javascript
 // 하드코딩된 테스트 값들
 const testData = {
