@@ -3,6 +3,7 @@ from bson import ObjectId
 from pymongo.collection import Collection
 from embedding_service import EmbeddingService
 from vector_service import VectorService
+from chunking_service import ChunkingService
 import re
 from collections import Counter
 
@@ -17,6 +18,7 @@ class SimilarityService:
         """
         self.embedding_service = embedding_service
         self.vector_service = vector_service
+        self.chunking_service = ChunkingService()
         # 유사도 임계값 설정
         self.similarity_threshold = 0.3   # 30%로 설정
         # 필드별 최소 유사도 임계값 (성장배경, 지원동기, 경력사항만 사용)
@@ -26,6 +28,190 @@ class SimilarityService:
             'careerHistory': 0.2,      # 경력사항 20% 이상
         }
     
+    async def save_resume_chunks(self, resume: Dict[str, Any]) -> Dict[str, Any]:
+        """
+        이력서를 청킹하여 벡터 저장합니다.
+        
+        Args:
+            resume (Dict[str, Any]): 이력서 데이터
+            
+        Returns:
+            Dict[str, Any]: 저장 결과
+        """
+        try:
+            print(f"[SimilarityService] === 청킹 기반 벡터 저장 시작 ===")
+            resume_id = str(resume["_id"])
+            
+            # 이력서를 청크로 분할
+            chunks = self.chunking_service.chunk_resume_text(resume)
+            
+            if not chunks:
+                return {
+                    "success": False,
+                    "error": "생성된 청크가 없습니다.",
+                    "chunks_count": 0
+                }
+            
+            # 청크별 벡터 저장
+            stored_vector_ids = await self.vector_service.save_chunk_vectors(chunks, self.embedding_service)
+            
+            print(f"[SimilarityService] 총 {len(stored_vector_ids)}개 청크 벡터 저장 완료")
+            print(f"[SimilarityService] === 청킹 기반 벡터 저장 완료 ===")
+            
+            return {
+                "success": True,
+                "resume_id": resume_id,
+                "chunks_count": len(chunks),
+                "stored_vectors": len(stored_vector_ids),
+                "vector_ids": stored_vector_ids
+            }
+            
+        except Exception as e:
+            print(f"[SimilarityService] 청킹 기반 벡터 저장 실패: {str(e)}")
+            return {
+                "success": False,
+                "error": str(e),
+                "chunks_count": 0
+            }
+    
+    async def find_similar_resumes_by_chunks(self, resume_id: str, collection: Collection, limit: int = 5) -> Dict[str, Any]:
+        """
+        청킹 기반으로 특정 이력서와 유사한 이력서들을 찾습니다.
+        
+        Args:
+            resume_id (str): 기준이 되는 이력서 ID
+            collection (Collection): MongoDB 컬렉션
+            limit (int): 반환할 최대 결과 수
+            
+        Returns:
+            Dict[str, Any]: 유사도 검색 결과
+        """
+        try:
+            print(f"[SimilarityService] === 청킹 기반 유사도 검색 시작 ===")
+            print(f"[SimilarityService] 이력서 ID: {resume_id}")
+            
+            # 해당 이력서 조회
+            resume = collection.find_one({"_id": ObjectId(resume_id)})
+            if not resume:
+                raise ValueError("이력서를 찾을 수 없습니다.")
+            
+            # 이력서를 청크로 분할
+            query_chunks = self.chunking_service.chunk_resume_text(resume)
+            if not query_chunks:
+                raise ValueError("검색할 청크가 없습니다.")
+            
+            print(f"[SimilarityService] 검색 청크 수: {len(query_chunks)}")
+            
+            # 각 청크별로 유사 벡터 검색
+            chunk_similarities = {}
+            for chunk in query_chunks:
+                print(f"[SimilarityService] 청크 '{chunk['chunk_type']}' 검색 중...")
+                
+                # 청크 텍스트로 임베딩 생성
+                query_embedding = await self.embedding_service.create_embedding(chunk["text"])
+                if not query_embedding:
+                    continue
+                
+                # Pinecone에서 유사한 벡터 검색
+                search_result = await self.vector_service.search_similar_vectors(
+                    query_embedding=query_embedding,
+                    top_k=limit * 3,  # 청크별로 더 많이 검색
+                    filter_type="resume"
+                )
+                
+                # 결과 저장
+                for match in search_result["matches"]:
+                    match_resume_id = match["metadata"]["resume_id"]
+                    similarity_score = match["score"]
+                    chunk_type = match["metadata"]["chunk_type"]
+                    
+                    # 자기 자신 제외
+                    if match_resume_id == resume_id:
+                        continue
+                    
+                    # 이력서별로 청크 유사도 누적
+                    if match_resume_id not in chunk_similarities:
+                        chunk_similarities[match_resume_id] = {
+                            "chunks": {},
+                            "total_score": 0.0,
+                            "chunk_count": 0
+                        }
+                    
+                    # 동일한 청크 타입에서 더 높은 점수만 유지
+                    key = f"{chunk['chunk_type']}_to_{chunk_type}"
+                    if key not in chunk_similarities[match_resume_id]["chunks"] or \
+                       similarity_score > chunk_similarities[match_resume_id]["chunks"][key]["score"]:
+                        
+                        chunk_similarities[match_resume_id]["chunks"][key] = {
+                            "score": similarity_score,
+                            "query_chunk": chunk['chunk_type'],
+                            "match_chunk": chunk_type,
+                            "match_text": match["metadata"].get("text_preview", "")
+                        }
+            
+            # 이력서별 종합 점수 계산
+            resume_scores = []
+            for match_resume_id, data in chunk_similarities.items():
+                if not data["chunks"]:
+                    continue
+                
+                # 청크 점수들의 평균 계산
+                chunk_scores = [chunk_data["score"] for chunk_data in data["chunks"].values()]
+                avg_score = sum(chunk_scores) / len(chunk_scores)
+                
+                # 임계값 체크
+                if avg_score >= self.similarity_threshold:
+                    resume_scores.append({
+                        "resume_id": match_resume_id,
+                        "similarity_score": avg_score,
+                        "chunk_matches": len(data["chunks"]),
+                        "chunk_details": data["chunks"]
+                    })
+            
+            # 점수 순으로 정렬
+            resume_scores.sort(key=lambda x: x["similarity_score"], reverse=True)
+            resume_scores = resume_scores[:limit]
+            
+            # MongoDB에서 상세 정보 조회
+            results = []
+            if resume_scores:
+                resume_ids = [ObjectId(score["resume_id"]) for score in resume_scores]
+                resumes_detail = list(collection.find({"_id": {"$in": resume_ids}}))
+                
+                for score_data in resume_scores:
+                    resume_detail = next((r for r in resumes_detail if str(r["_id"]) == score_data["resume_id"]), None)
+                    if resume_detail:
+                        resume_detail["_id"] = str(resume_detail["_id"])
+                        resume_detail["created_at"] = resume_detail["created_at"].isoformat()
+                        
+                        results.append({
+                            "similarity_score": score_data["similarity_score"],
+                            "similarity_percentage": round(score_data["similarity_score"] * 100, 1),
+                            "chunk_matches": score_data["chunk_matches"],
+                            "resume": resume_detail,
+                            "chunk_details": score_data["chunk_details"]
+                        })
+            
+            print(f"[SimilarityService] 최종 유사 이력서 수: {len(results)}")
+            print(f"[SimilarityService] === 청킹 기반 유사도 검색 완료 ===")
+            
+            return {
+                "success": True,
+                "data": {
+                    "original_resume": {
+                        "id": str(resume["_id"]),
+                        "name": resume.get("name", "Unknown"),
+                        "chunk_count": len(query_chunks)
+                    },
+                    "similar_resumes": results,
+                    "total": len(results)
+                }
+            }
+            
+        except Exception as e:
+            print(f"[SimilarityService] 청킹 기반 유사도 검색 실패: {str(e)}")
+            raise e
+
     async def find_similar_resumes(self, resume_id: str, collection: Collection, limit: int = 5) -> Dict[str, Any]:
         """
         특정 이력서와 유사한 이력서들을 찾습니다.

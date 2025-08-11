@@ -45,6 +45,80 @@ class VectorService:
                 # 인덱스 생성에 실패해도 서버는 계속 실행
                 self.index = None
     
+    async def save_chunk_vectors(self, chunks: List[Dict[str, Any]], embedding_service) -> List[str]:
+        """
+        여러 청크의 벡터를 Pinecone에 저장합니다.
+        
+        Args:
+            chunks (List[Dict[str, Any]]): 청크 리스트
+            embedding_service: 임베딩 서비스
+            
+        Returns:
+            List[str]: 저장된 벡터 ID 리스트
+        """
+        print(f"[VectorService] === 청크 벡터 저장 시작 ===")
+        print(f"[VectorService] 저장할 청크 수: {len(chunks)}")
+        
+        if self.index is None:
+            print("[VectorService] Pinecone 인덱스가 없어 벡터를 저장할 수 없습니다.")
+            return []
+        
+        stored_vector_ids = []
+        vectors_to_upsert = []
+        
+        # 모든 청크에 대해 임베딩 생성
+        for chunk in chunks:
+            try:
+                # 청크 텍스트로 임베딩 생성
+                embedding = await embedding_service.create_embedding(chunk["text"])
+                
+                if not embedding:
+                    print(f"[VectorService] 청크 '{chunk['chunk_id']}' 임베딩 생성 실패")
+                    continue
+                
+                # 벡터 데이터 구성
+                vector_data = {
+                    "id": chunk["chunk_id"],
+                    "values": embedding,
+                    "metadata": {
+                        "resume_id": chunk["resume_id"],
+                        "chunk_type": chunk["chunk_type"],
+                        "section": chunk["metadata"]["section"],
+                        "original_field": chunk["metadata"].get("original_field", ""),
+                        "item_index": chunk["metadata"].get("item_index", 0),
+                        "text_preview": chunk["text"][:100] + "..." if len(chunk["text"]) > 100 else chunk["text"],
+                        "created_at": datetime.now().isoformat()
+                    }
+                }
+                
+                vectors_to_upsert.append(vector_data)
+                stored_vector_ids.append(chunk["chunk_id"])
+                
+                print(f"[VectorService] 청크 준비: {chunk['chunk_id']} ({chunk['chunk_type']}) - {len(chunk['text'])} 문자")
+                
+            except Exception as e:
+                print(f"[VectorService] 청크 '{chunk['chunk_id']}' 처리 중 오류: {e}")
+                continue
+        
+        # 배치로 모든 벡터 저장
+        if vectors_to_upsert:
+            try:
+                print(f"[VectorService] {len(vectors_to_upsert)}개 벡터 배치 저장 시작...")
+                self.index.upsert(vectors=vectors_to_upsert)
+                print(f"[VectorService] 배치 저장 성공!")
+                
+                # 인덱싱 완료 대기
+                print(f"[VectorService] 인덱싱 완료 대기 중...")
+                await self._wait_for_batch_indexing(stored_vector_ids)
+                print(f"[VectorService] 인덱싱 완료")
+                
+            except Exception as e:
+                print(f"[VectorService] 배치 저장 실패: {e}")
+                return []
+        
+        print(f"[VectorService] === 청크 벡터 저장 완료 ({len(stored_vector_ids)}개) ===")
+        return stored_vector_ids
+
     async def save_vector(self, embedding: List[float], metadata: Dict[str, Any]) -> Optional[str]:
         """
         벡터를 Pinecone에 저장합니다.
@@ -208,4 +282,41 @@ class VectorService:
                 await asyncio.sleep(check_interval)
         
         print(f"[VectorService] 인덱싱 확인 시간 초과 ({max_wait_time}초), 계속 진행...")
+        return False
+    
+    async def _wait_for_batch_indexing(self, vector_ids: List[str], max_wait_time: int = 15, check_interval: float = 2.0):
+        """
+        배치 벡터들의 인덱싱이 완료될 때까지 대기합니다.
+        
+        Args:
+            vector_ids (List[str]): 확인할 벡터 ID 리스트
+            max_wait_time (int): 최대 대기 시간 (초)
+            check_interval (float): 확인 간격 (초)
+        """
+        print(f"[VectorService] {len(vector_ids)}개 벡터 배치 인덱싱 확인 시작...")
+        
+        start_time = time.time()
+        attempt = 0
+        
+        while (time.time() - start_time) < max_wait_time:
+            attempt += 1
+            try:
+                # 샘플 벡터들이 검색 가능한지 확인 (전체가 아닌 일부만)
+                sample_ids = vector_ids[:min(3, len(vector_ids))]  # 최대 3개만 확인
+                fetch_result = self.index.fetch(ids=sample_ids)
+                
+                found_count = len(fetch_result.get('vectors', {}))
+                if found_count >= len(sample_ids):
+                    elapsed = time.time() - start_time
+                    print(f"[VectorService] 배치 인덱싱 확인 완료! (시도: {attempt}, 소요시간: {elapsed:.1f}초)")
+                    return True
+                else:
+                    print(f"[VectorService] 배치 인덱싱 대기 중... (시도: {attempt}, {found_count}/{len(sample_ids)} 준비됨)")
+                    await asyncio.sleep(check_interval)
+                    
+            except Exception as e:
+                print(f"[VectorService] 배치 인덱싱 확인 중 오류 (시도 {attempt}): {e}")
+                await asyncio.sleep(check_interval)
+        
+        print(f"[VectorService] 배치 인덱싱 확인 시간 초과 ({max_wait_time}초), 계속 진행...")
         return False
