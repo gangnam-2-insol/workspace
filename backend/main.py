@@ -11,7 +11,7 @@ from typing import List, Optional
 import locale
 import codecs
 from datetime import datetime
-from chatbot_router import router as chatbot_router
+# from chatbot_router import router as chatbot_router
 
 # Python 환경 인코딩 설정
 # 시스템 기본 인코딩을 UTF-8로 설정
@@ -52,7 +52,7 @@ async def add_charset_header(request, call_next):
     return response
 
 # 라우터 등록
-app.include_router(chatbot_router, prefix="/api/chatbot", tags=["chatbot"])
+# app.include_router(chatbot_router, prefix="/api/chatbot", tags=["chatbot"])
 
 # MongoDB 연결
 MONGODB_URI = os.getenv("MONGODB_URI", "mongodb://localhost:27017/hireme")
@@ -69,9 +69,17 @@ class User(BaseModel):
 
 class Resume(BaseModel):
     id: Optional[str] = None
-    user_id: str
-    title: str
-    content: str
+    resume_id: Optional[str] = None
+    name: str
+    position: str
+    department: str
+    experience: str
+    skills: str
+    growthBackground: str
+    motivation: str
+    careerHistory: str
+    analysisScore: int = 0
+    analysisResult: str = ""
     status: str = "pending"
     created_at: Optional[datetime] = None
 
@@ -97,6 +105,10 @@ async def health_check():
 @app.get("/api/users", response_model=List[User])
 async def get_users():
     users = await db.users.find().to_list(1000)
+    # MongoDB의 _id를 id로 변환
+    for user in users:
+        user["id"] = str(user["_id"])
+        del user["_id"]
     return [User(**user) for user in users]
 
 @app.post("/api/users", response_model=User)
@@ -111,6 +123,10 @@ async def create_user(user: User):
 @app.get("/api/resumes", response_model=List[Resume])
 async def get_resumes():
     resumes = await db.resumes.find().to_list(1000)
+    # MongoDB의 _id를 id로 변환
+    for resume in resumes:
+        resume["id"] = str(resume["_id"])
+        del resume["_id"]
     return [Resume(**resume) for resume in resumes]
 
 @app.post("/api/resumes", response_model=Resume)
@@ -125,6 +141,10 @@ async def create_resume(resume: Resume):
 @app.get("/api/interviews", response_model=List[Interview])
 async def get_interviews():
     interviews = await db.interviews.find().to_list(1000)
+    # MongoDB의 _id를 id로 변환
+    for interview in interviews:
+        interview["id"] = str(interview["_id"])
+        del interview["_id"]
     return [Interview(**interview) for interview in interviews]
 
 @app.post("/api/interviews", response_model=Interview)
@@ -134,6 +154,65 @@ async def create_interview(interview: Interview):
     result = await db.interviews.insert_one(interview_dict)
     interview_dict["id"] = str(result.inserted_id)
     return Interview(**interview_dict)
+
+# 지원자 관련 API
+@app.get("/api/applicants")
+async def get_applicants(skip: int = 0, limit: int = 20):
+    try:
+        # 페이징으로 이력서(지원자) 목록 조회
+        applicants = await db.resumes.find().skip(skip).limit(limit).to_list(limit)
+        
+        # MongoDB의 _id를 id로 변환 및 ObjectId 필드들을 문자열로 변환
+        for applicant in applicants:
+            applicant["id"] = str(applicant["_id"])
+            del applicant["_id"]
+            # resume_id가 ObjectId인 경우 문자열로 변환
+            if "resume_id" in applicant and applicant["resume_id"]:
+                applicant["resume_id"] = str(applicant["resume_id"])
+        
+        # 총 지원자 수
+        total_count = await db.resumes.count_documents({})
+        
+        return {
+            "applicants": [Resume(**applicant) for applicant in applicants],
+            "total_count": total_count,
+            "skip": skip,
+            "limit": limit,
+            "has_more": (skip + limit) < total_count
+        }
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"지원자 목록 조회 실패: {str(e)}")
+
+# 지원자 통계 API
+@app.get("/api/applicants/stats/overview")
+async def get_applicant_stats():
+    try:
+        # 총 지원자 수 (resumes 컬렉션 기준)
+        total_applicants = await db.resumes.count_documents({})
+        
+        # 상태별 지원자 수
+        pending_count = await db.resumes.count_documents({"status": "pending"})
+        approved_count = await db.resumes.count_documents({"status": "approved"})
+        rejected_count = await db.resumes.count_documents({"status": "rejected"})
+        
+        # 최근 30일간 지원자 수
+        thirty_days_ago = datetime.now().replace(day=datetime.now().day-30) if datetime.now().day > 30 else datetime.now().replace(month=datetime.now().month-1, day=1)
+        recent_applicants = await db.resumes.count_documents({
+            "created_at": {"$gte": thirty_days_ago}
+        })
+        
+        return {
+            "total_applicants": total_applicants,
+            "status_breakdown": {
+                "pending": pending_count,
+                "approved": approved_count,
+                "rejected": rejected_count
+            },
+            "recent_applicants_30_days": recent_applicants,
+            "success_rate": round((approved_count / total_applicants * 100) if total_applicants > 0 else 0, 2)
+        }
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"지원자 통계 조회 실패: {str(e)}")
 
 if __name__ == "__main__":
     uvicorn.run(app, host="0.0.0.0", port=8000) 

@@ -54,7 +54,7 @@ const api = {
       
       const data = await response.json();
       console.log('✅ API 응답 데이터:', data);
-      return data;
+      return data.applicants || [];
     } catch (error) {
       console.error('❌ 지원자 데이터 조회 오류:', error);
       throw error;
@@ -1997,214 +1997,10 @@ const RankBadge = styled.span`
   color: white;
 `;
 
-const sampleApplicants = [
-  {
-    id: 1,
-    name: '김지원',
-    position: '프론트엔드 개발자',
-    department: '개발팀',
-    email: 'kim.jiwon@email.com',
-    phone: '010-1234-5678',
-    appliedDate: '2024-01-15',
-    status: '지원',
-    experience: '3년',
-    skills: ['React', 'TypeScript', 'JavaScript'],
-    rating: 4.5,
-    summary: 'React와 TypeScript에 능숙하며, 사용자 경험을 중시하는 프론트엔드 개발자입니다. 팀 프로젝트에서 리더 역할을 수행한 경험이 있고, 새로운 기술 학습에 적극적입니다.',
-    documents: {
-      resume: {
-        personalInfo: {
-          name: '김지원',
-          email: 'kim.jiwon@email.com',
-          phone: '010-1234-5678',
-          address: '서울시 강남구',
-          birth: '1995.03.15'
-        },
-        education: [
-          {
-            school: '서울대학교',
-            major: '컴퓨터공학과',
-            degree: '학사',
-            period: '2014.03 - 2018.02',
-            gpa: '4.2/4.5'
-          }
-        ],
-        experience: [
-          {
-            company: '테크스타트업',
-            position: '프론트엔드 개발자',
-            period: '2021.03 - 현재',
-            description: 'React와 TypeScript를 활용한 웹 애플리케이션 개발, 사용자 경험 개선 프로젝트 리드'
-          },
-          {
-            company: 'IT컨설팅',
-            position: '웹 개발자',
-            period: '2018.03 - 2021.02',
-            description: 'JavaScript 기반 웹사이트 개발, 반응형 디자인 구현'
-          }
-        ],
-        skills: {
-          programming: ['JavaScript', 'TypeScript', 'React', 'Vue.js', 'HTML/CSS'],
-          tools: ['Git', 'Webpack', 'VS Code', 'Figma'],
-          languages: ['한국어', '영어']
-        }
-      },
-      coverLetter: {
-        motivation: '사용자 중심의 웹 애플리케이션을 개발하여 더 나은 디지털 경험을 제공하고 싶습니다. React 생태계에 대한 깊은 이해와 팀 협업 경험을 바탕으로 혁신적인 제품 개발에 기여하고자 합니다.',
-        strengths: [
-          '사용자 경험을 중시하는 개발 철학',
-          '새로운 기술 학습에 대한 적극적인 자세',
-          '팀 프로젝트에서의 리더십 경험',
-          '문제 해결 능력과 창의적 사고'
-        ],
-        goals: '3년 내에 프론트엔드 아키텍트로 성장하여 팀의 기술적 방향을 이끌고, 사용자에게 최고의 경험을 제공하는 제품을 만들어가고 싶습니다.'
-      },
-      portfolio: {
-        projects: [
-          {
-            title: 'E-커머스 플랫폼',
-            description: 'React와 TypeScript를 활용한 온라인 쇼핑몰 개발',
-            technologies: ['React', 'TypeScript', 'Redux', 'Styled-components'],
-            features: ['반응형 디자인', '장바구니 기능', '결제 시스템 연동', '관리자 대시보드'],
-            github: 'https://github.com/kimjiwon/ecommerce',
-            demo: 'https://ecommerce-demo.com'
-          },
-          {
-            title: '실시간 채팅 앱',
-            description: 'Socket.io를 활용한 실시간 메신저 애플리케이션',
-            technologies: ['React', 'Socket.io', 'Node.js', 'MongoDB'],
-            features: ['실시간 메시징', '파일 공유', '그룹 채팅', '이모지 지원'],
-            github: 'https://github.com/kimjiwon/chat-app',
-            demo: 'https://chat-app-demo.com'
-          },
-          {
-            title: '날씨 정보 앱',
-            description: 'OpenWeather API를 활용한 날씨 정보 제공 애플리케이션',
-            technologies: ['React', 'OpenWeather API', 'Chart.js', 'PWA'],
-            features: ['실시간 날씨 정보', '5일 예보', '위치 기반 서비스', '오프라인 지원'],
-            github: 'https://github.com/kimjiwon/weather-app',
-            demo: 'https://weather-app-demo.com'
-          }
-        ],
-        achievements: [
-          '2023년 개발자 컨퍼런스 발표자 선정',
-          '오픈소스 프로젝트 50+ 기여',
-          'GitHub 스타 200+ 획득',
-          '개발 블로그 월 10,000+ 방문자'
-        ]
-      }
-    },
-    aiSuitability: 92,
-    aiScores: {
-      resume: 88,
-      coverLetter: 92,
-      portfolio: 95
-    }
-  },
-  {
-    id: 2,
-    name: '박민수',
-    position: '백엔드 개발자',
-    department: '개발팀',
-    email: 'park.minsu@email.com',
-    phone: '010-2345-6789',
-    appliedDate: '2024-01-14',
-    status: '지원',
-    experience: '5년',
-    skills: ['Java', 'Spring', 'MySQL'],
-    rating: 4.8,
-    summary: 'Spring Framework와 Java 개발에 전문성을 가지고 있으며, 대용량 데이터 처리와 시스템 아키텍처 설계 경험이 풍부합니다. 마이크로서비스 아키텍처 구축 경험이 있습니다.',
-    aiSuitability: 88,
-    aiScores: {
-      resume: 85,
-      coverLetter: 88,
-      portfolio: 90
-    }
-  },
-  {
-    id: 3,
-    name: '이서연',
-    position: 'UI/UX 디자이너',
-    department: '디자인팀',
-    email: 'lee.seoyeon@email.com',
-    phone: '010-3456-7890',
-    appliedDate: '2024-01-13',
-    status: '지원',
-    experience: '2년',
-    skills: ['Figma', 'Adobe XD', 'Photoshop'],
-    rating: 3.9,
-    summary: '사용자 중심의 디자인을 추구하며, 프로토타이핑과 사용자 테스트를 통한 디자인 검증 경험이 있습니다. 브랜드 아이덴티티 디자인에도 관심이 많습니다.',
-    aiSuitability: 75,
-    aiScores: {
-      resume: 72,
-      coverLetter: 75,
-      portfolio: 78
-    }
-  },
-  {
-    id: 4,
-    name: '정현우',
-    position: 'DevOps 엔지니어',
-    department: '인프라팀',
-    email: 'jung.hyunwoo@email.com',
-    phone: '010-4567-8901',
-    appliedDate: '2024-01-12',
-    status: '지원',
-    experience: '4년',
-    skills: ['Docker', 'Kubernetes', 'AWS'],
-    rating: 4.7,
-    summary: '클라우드 인프라 구축과 컨테이너 오케스트레이션에 전문성을 가지고 있으며, CI/CD 파이프라인 구축과 모니터링 시스템 설계 경험이 풍부합니다.',
-    aiSuitability: 95,
-    aiScores: {
-      resume: 92,
-      coverLetter: 95,
-      portfolio: 98
-    }
-  },
-  {
-    id: 5,
-    name: '최수진',
-    position: '데이터 분석가',
-    department: '데이터팀',
-    email: 'choi.sujin@email.com',
-    phone: '010-5678-9012',
-    appliedDate: '2024-01-11',
-    status: '지원',
-    experience: '3년',
-    skills: ['Python', 'SQL', 'Tableau'],
-    rating: 4.2,
-    summary: '데이터 분석과 시각화에 전문성을 가지고 있으며, 비즈니스 인사이트 도출을 통한 의사결정 지원 경험이 풍부합니다. 머신러닝 모델 개발 경험도 있습니다.',
-    aiSuitability: 82,
-    aiScores: {
-      resume: 80,
-      coverLetter: 82,
-      portfolio: 85
-    }
-  },
-  {
-    id: 6,
-    name: '강동현',
-    position: '모바일 개발자',
-    department: '개발팀',
-    email: 'kang.donghyun@email.com',
-    phone: '010-6789-0123',
-    appliedDate: '2024-01-10',
-    status: '지원',
-    experience: '6년',
-    skills: ['iOS', 'Swift', 'Android'],
-    rating: 4.6,
-    summary: 'iOS와 Android 플랫폼 모두에서 앱 개발 경험이 풍부하며, 네이티브 앱과 크로스 플랫폼 개발 모두 가능합니다. 사용자 경험을 중시하는 앱 개발에 특화되어 있습니다.',
-    aiSuitability: 89,
-    aiScores: {
-      resume: 87,
-      coverLetter: 89,
-      portfolio: 92
-    }
-  }
-];
+// 샘플 데이터 제거됨 - 이제 MongoDB에서만 데이터를 가져옵니다
 
 // 메모이제이션된 지원자 카드 컴포넌트
-const MemoizedApplicantCard = React.memo(({ applicant, onCardClick, onStatusUpdate }) => {
+const MemoizedApplicantCard = React.memo(({ applicant, onCardClick, onStatusUpdate, getStatusText }) => {
   const handleStatusUpdate = useCallback(async (newStatus) => {
     try {
       await onStatusUpdate(applicant.id, newStatus);
@@ -2225,7 +2021,7 @@ const MemoizedApplicantCard = React.memo(({ applicant, onCardClick, onStatusUpda
           <ApplicantPosition>{applicant.position}</ApplicantPosition>
         </ApplicantInfo>
         <StatusBadge status={applicant.status}>
-          {applicant.status}
+          {getStatusText(applicant.status)}
         </StatusBadge>
       </CardHeader>
       
@@ -2244,7 +2040,7 @@ const MemoizedApplicantCard = React.memo(({ applicant, onCardClick, onStatusUpda
         </InfoRow>
         <InfoRow>
           <FiCode />
-          <span>{applicant.skills.join(', ')}</span>
+          <span>{applicant.skills || '기술 정보 없음'}</span>
         </InfoRow>
       </CardContent>
       
@@ -2287,7 +2083,21 @@ const MemoizedApplicantCard = React.memo(({ applicant, onCardClick, onStatusUpda
 MemoizedApplicantCard.displayName = 'MemoizedApplicantCard';
 
 const ApplicantManagement = () => {
-  const [applicants, setApplicants] = useState(sampleApplicants);
+  // Status 매핑 함수
+  const getStatusText = (status) => {
+    const statusMap = {
+      'pending': '보류',
+      'approved': '승인',
+      'rejected': '거절',
+      '서류합격': '서류합격',
+      '최종합격': '최종합격', 
+      '서류불합격': '서류불합격',
+      '보류': '보류'
+    };
+    return statusMap[status] || status;
+  };
+
+  const [applicants, setApplicants] = useState([]);
   const [searchTerm, setSearchTerm] = useState('');
   const [filterStatus, setFilterStatus] = useState('전체');
   const [selectedApplicant, setSelectedApplicant] = useState(null);
@@ -2332,19 +2142,19 @@ const ApplicantManagement = () => {
 
   // 메모이제이션된 필터링된 지원자 목록
   const filteredApplicants = useMemo(() => {
-    return applicants.filter(applicant => {
+    return (applicants || []).filter(applicant => {
       const searchLower = searchTerm.toLowerCase();
       
-      // 검색 필터링
-      const matchesSearch = applicant.name.toLowerCase().includes(searchLower) ||
-                          applicant.position.toLowerCase().includes(searchLower) ||
-                          applicant.email.toLowerCase().includes(searchLower) ||
-                          applicant.skills.some(skill => 
-                            skill.toLowerCase().includes(searchLower)
-                          );
+      // 검색 필터링 (null/undefined 체크 추가)
+      const matchesSearch = (applicant.name || '').toLowerCase().includes(searchLower) ||
+                          (applicant.position || '').toLowerCase().includes(searchLower) ||
+                          (applicant.email || '').toLowerCase().includes(searchLower) ||
+                          (applicant.skills || '').toLowerCase().includes(searchLower);
       
-      // 상태 필터링
-      const matchesStatus = filterStatus === '전체' || applicant.status === filterStatus;
+      // 상태 필터링 (한국어 필터를 영어 상태와 매칭)
+      const matchesStatus = filterStatus === '전체' || 
+                           getStatusText(applicant.status) === filterStatus ||
+                           applicant.status === filterStatus;
       
       // 직무 필터링
       const matchesJob = selectedJobs.length === 0 || 
@@ -2401,14 +2211,14 @@ const ApplicantManagement = () => {
         
         setHasMore(apiApplicants.length === pageSize);
       } else {
-        console.log('⚠️ API에 데이터가 없어 기본 샘플 데이터를 사용합니다.');
-        setApplicants(sampleApplicants);
+        console.log('⚠️ API에서 데이터를 찾을 수 없습니다.');
+        setApplicants([]);
         setHasMore(false);
       }
     } catch (error) {
       console.error('❌ API 연결 실패:', error);
-      console.log('🔄 기본 샘플 데이터로 전환합니다. Backend 서버 상태를 확인해주세요.');
-      setApplicants(sampleApplicants);
+      console.log('🔄 백엔드 서버 연결을 확인해주세요.');
+      setApplicants([]);
       setHasMore(false);
     } finally {
       setIsLoading(false);
@@ -2430,10 +2240,10 @@ const ApplicantManagement = () => {
   // 로컬 통계 업데이트
   const updateLocalStats = useCallback(() => {
     const currentStats = {
-      total: applicants.length,
-      passed: applicants.filter(a => a.status === '서류합격' || a.status === '최종합격').length,
-      waiting: applicants.filter(a => a.status === '보류').length,
-      rejected: applicants.filter(a => a.status === '서류불합격').length
+      total: (applicants || []).length,
+      passed: (applicants || []).filter(a => a.status === '서류합격' || a.status === '최종합격').length,
+      waiting: (applicants || []).filter(a => a.status === '보류').length,
+      rejected: (applicants || []).filter(a => a.status === '서류불합격').length
     };
     setStats(currentStats);
   }, [applicants]);
@@ -2457,7 +2267,7 @@ const ApplicantManagement = () => {
       
       // 로컬 상태 업데이트 및 통계 즉시 계산
       setApplicants(prev => {
-        const updatedApplicants = prev.map(applicant => 
+        const updatedApplicants = (prev || []).map(applicant => 
           applicant.id === applicantId 
             ? { ...applicant, status: newStatus }
             : applicant
@@ -2563,7 +2373,7 @@ const ApplicantManagement = () => {
       setSelectedApplicants([]);
       setSelectAll(false);
     } else {
-      setSelectedApplicants(paginatedApplicants.map(applicant => applicant.id));
+      setSelectedApplicants((paginatedApplicants || []).map(applicant => applicant.id));
       setSelectAll(true);
     }
   };
@@ -2612,8 +2422,8 @@ const ApplicantManagement = () => {
     const filters = [];
     if (searchTerm) filters.push(`검색: "${searchTerm}"`);
     if (filterStatus !== '전체') filters.push(`상태: ${filterStatus}`);
-    if (selectedJobs.length > 0) filters.push(`직무: ${selectedJobs.join(', ')}`);
-    if (selectedExperience.length > 0) filters.push(`경력: ${selectedExperience.join(', ')}`);
+    if ((selectedJobs || []).length > 0) filters.push(`직무: ${(selectedJobs || []).join(', ')}`);
+    if ((selectedExperience || []).length > 0) filters.push(`경력: ${(selectedExperience || []).join(', ')}`);
     return filters.join(' | ');
   };
 
@@ -3022,6 +2832,7 @@ const ApplicantManagement = () => {
                 applicant={applicant}
                 onCardClick={handleCardClick}
                 onStatusUpdate={handleUpdateStatus}
+                getStatusText={getStatusText}
               />
             ))
           ) : (
@@ -3079,9 +2890,9 @@ const ApplicantManagement = () => {
                       </ContactItem>
                     </ApplicantPhoneBoard>
                     <ApplicantSkillsBoard>
-                      {applicant.skills.slice(0, 3).map((skill, skillIndex) => (
+                      {(applicant.skills || '').split(',').slice(0, 3).map((skill, skillIndex) => (
                         <SkillTagBoard key={skillIndex}>
-                          {skill}
+                          {skill.trim()}
                         </SkillTagBoard>
                       ))}
                       {applicant.skills.length > 3 && (
@@ -3123,7 +2934,7 @@ const ApplicantManagement = () => {
                         animate={{ opacity: 1, scale: 1 }}
                         transition={{ duration: 0.08, ease: "easeOut" }}
                       >
-                        {applicant.status}
+                        {getStatusText(applicant.status)}
                       </StatusBadge>
                       </StatusColumnWrapper>
                     )}
@@ -3205,9 +3016,9 @@ const ApplicantManagement = () => {
                   기술스택
                 </SkillsTitle>
                 <SkillsGrid>
-                  {selectedApplicant.skills.map((skill, index) => (
+                  {(selectedApplicant.skills || '').split(',').map((skill, index) => (
                     <SkillTag key={index}>
-                      {skill}
+                      {skill.trim()}
                     </SkillTag>
                   ))}
                 </SkillsGrid>
@@ -3299,7 +3110,7 @@ const ApplicantManagement = () => {
 
                     <DocumentSection>
                       <DocumentSectionTitle>학력사항</DocumentSectionTitle>
-                      {documentModal.applicant.documents.resume.education.map((edu, index) => (
+                      {(documentModal.applicant.documents.resume.education || []).map((edu, index) => (
                         <DocumentCard key={index}>
                           <DocumentCardTitle>{edu.school}</DocumentCardTitle>
                           <DocumentCardText>{edu.major} ({edu.degree})</DocumentCardText>
@@ -3311,7 +3122,7 @@ const ApplicantManagement = () => {
 
                     <DocumentSection>
                       <DocumentSectionTitle>경력사항</DocumentSectionTitle>
-                      {documentModal.applicant.documents.resume.experience.map((exp, index) => (
+                      {(documentModal.applicant.documents.resume.experience || []).map((exp, index) => (
                         <DocumentCard key={index}>
                           <DocumentCardTitle>{exp.company} - {exp.position}</DocumentCardTitle>
                           <DocumentCardText>기간: {exp.period}</DocumentCardText>
@@ -3325,15 +3136,15 @@ const ApplicantManagement = () => {
                       <DocumentGrid>
                         <DocumentCard>
                           <DocumentCardTitle>프로그래밍 언어</DocumentCardTitle>
-                          <DocumentCardText>{documentModal.applicant.documents.resume.skills.programming.join(', ')}</DocumentCardText>
+                          <DocumentCardText>{(documentModal.applicant.documents.resume.skills.programming || []).join(', ')}</DocumentCardText>
                         </DocumentCard>
                         <DocumentCard>
                           <DocumentCardTitle>개발 도구</DocumentCardTitle>
-                          <DocumentCardText>{documentModal.applicant.documents.resume.skills.tools.join(', ')}</DocumentCardText>
+                          <DocumentCardText>{(documentModal.applicant.documents.resume.skills.tools || []).join(', ')}</DocumentCardText>
                         </DocumentCard>
                         <DocumentCard>
                           <DocumentCardTitle>언어</DocumentCardTitle>
-                          <DocumentCardText>{documentModal.applicant.documents.resume.skills.languages.join(', ')}</DocumentCardText>
+                          <DocumentCardText>{(documentModal.applicant.documents.resume.skills.languages || []).join(', ')}</DocumentCardText>
                         </DocumentCard>
                       </DocumentGrid>
                     </DocumentSection>
@@ -3350,7 +3161,7 @@ const ApplicantManagement = () => {
                     <DocumentSection>
                       <DocumentSectionTitle>나의 강점</DocumentSectionTitle>
                       <DocumentList>
-                        {documentModal.applicant.documents.coverLetter.strengths.map((strength, index) => (
+                        {(documentModal.applicant.documents.coverLetter.strengths || []).map((strength, index) => (
                           <DocumentListItem key={index}>{strength}</DocumentListItem>
                         ))}
                       </DocumentList>
@@ -3367,14 +3178,14 @@ const ApplicantManagement = () => {
                   <>
                     <DocumentSection>
                       <DocumentSectionTitle>프로젝트</DocumentSectionTitle>
-                      {documentModal.applicant.documents.portfolio.projects.map((project, index) => (
+                      {(documentModal.applicant.documents.portfolio.projects || []).map((project, index) => (
                         <DocumentCard key={index}>
                           <DocumentCardTitle>{project.title}</DocumentCardTitle>
                           <DocumentCardText>{project.description}</DocumentCardText>
-                          <DocumentCardText><strong>기술스택:</strong> {project.technologies.join(', ')}</DocumentCardText>
+                          <DocumentCardText><strong>기술스택:</strong> {(project.technologies || []).join(', ')}</DocumentCardText>
                           <DocumentCardText><strong>주요 기능:</strong></DocumentCardText>
                           <DocumentList>
-                            {project.features.map((feature, idx) => (
+                            {(project.features || []).map((feature, idx) => (
                               <DocumentListItem key={idx}>{feature}</DocumentListItem>
                             ))}
                           </DocumentList>
@@ -3387,7 +3198,7 @@ const ApplicantManagement = () => {
                     <DocumentSection>
                       <DocumentSectionTitle>성과 및 수상</DocumentSectionTitle>
                       <DocumentList>
-                        {documentModal.applicant.documents.portfolio.achievements.map((achievement, index) => (
+                        {(documentModal.applicant.documents.portfolio.achievements || []).map((achievement, index) => (
                           <DocumentListItem key={index}>{achievement}</DocumentListItem>
                         ))}
                       </DocumentList>
@@ -3660,7 +3471,7 @@ const ApplicantManagement = () => {
                     <ResumeAnalysisItem>
                       <ResumeAnalysisLabel>추출된 기술:</ResumeAnalysisLabel>
                       <ResumeAnalysisSkills>
-                        {analysisResult.skills.map((skill, index) => (
+                        {(analysisResult.skills || []).map((skill, index) => (
                           <ResumeSkillTag key={index}>{skill}</ResumeSkillTag>
                         ))}
                       </ResumeAnalysisSkills>
@@ -3668,7 +3479,7 @@ const ApplicantManagement = () => {
                     <ResumeAnalysisItem>
                       <ResumeAnalysisLabel>추천 사항:</ResumeAnalysisLabel>
                       <ResumeAnalysisRecommendations>
-                        {analysisResult.recommendations.map((rec, index) => (
+                        {(analysisResult.recommendations || []).map((rec, index) => (
                           <ResumeRecommendationItem key={index}>• {rec}</ResumeRecommendationItem>
                         ))}
                       </ResumeAnalysisRecommendations>
