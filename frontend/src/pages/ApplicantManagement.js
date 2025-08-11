@@ -2102,7 +2102,7 @@ const ApplicantManagement = () => {
   const [filterStatus, setFilterStatus] = useState('전체');
   const [selectedApplicant, setSelectedApplicant] = useState(null);
   const [isModalOpen, setIsModalOpen] = useState(false);
-  const [documentModal, setDocumentModal] = useState({ isOpen: false, type: '', applicant: null });
+  const [documentModal, setDocumentModal] = useState({ isOpen: false, type: '', applicant: null, isOriginal: false });
   const [filterModal, setFilterModal] = useState(false);
   const [selectedJobs, setSelectedJobs] = useState([]);
   const [selectedExperience, setSelectedExperience] = useState([]);
@@ -2321,11 +2321,15 @@ const ApplicantManagement = () => {
   };
 
   const handleDocumentClick = (type, applicant) => {
-    setDocumentModal({ isOpen: true, type, applicant });
+    setDocumentModal({ isOpen: true, type, applicant, isOriginal: false });
+  };
+
+  const handleOriginalClick = () => {
+    setDocumentModal(prev => ({ ...prev, isOriginal: !prev.isOriginal }));
   };
 
   const handleCloseDocumentModal = () => {
-    setDocumentModal({ isOpen: false, type: '', applicant: null });
+    setDocumentModal({ isOpen: false, type: '', applicant: null, isOriginal: false });
   };
 
   const handleFilterClick = () => {
@@ -3076,15 +3080,79 @@ const ApplicantManagement = () => {
                   - {documentModal.applicant.name}
                 </DocumentModalTitle>
                 <DocumentHeaderActions>
-                  <DocumentOriginalButton>
-                    원본보기
+                  <DocumentOriginalButton onClick={handleOriginalClick}>
+                    {documentModal.isOriginal ? '요약보기' : '원본보기'}
                   </DocumentOriginalButton>
                   <DocumentCloseButton onClick={handleCloseDocumentModal}>&times;</DocumentCloseButton>
                 </DocumentHeaderActions>
               </DocumentModalHeader>
 
               <DocumentContent>
-                {documentModal.type === 'resume' && documentModal.applicant.documents?.resume && (
+                {documentModal.type === 'resume' && documentModal.isOriginal && (
+                  <>
+                    <DocumentSection>
+                      <DocumentSectionTitle>지원자 기본정보</DocumentSectionTitle>
+                      <DocumentGrid>
+                        <DocumentCard>
+                          <DocumentCardTitle>이름</DocumentCardTitle>
+                          <DocumentCardText>{documentModal.applicant.name || 'N/A'}</DocumentCardText>
+                        </DocumentCard>
+                        <DocumentCard>
+                          <DocumentCardTitle>지원 직무</DocumentCardTitle>
+                          <DocumentCardText>{documentModal.applicant.position || 'N/A'}</DocumentCardText>
+                        </DocumentCard>
+                        <DocumentCard>
+                          <DocumentCardTitle>부서</DocumentCardTitle>
+                          <DocumentCardText>{documentModal.applicant.department || 'N/A'}</DocumentCardText>
+                        </DocumentCard>
+                        <DocumentCard>
+                          <DocumentCardTitle>경력</DocumentCardTitle>
+                          <DocumentCardText>{documentModal.applicant.experience || 'N/A'}</DocumentCardText>
+                        </DocumentCard>
+                        <DocumentCard>
+                          <DocumentCardTitle>기술스택</DocumentCardTitle>
+                          <DocumentCardText>{documentModal.applicant.skills || '정보 없음'}</DocumentCardText>
+                        </DocumentCard>
+                        <DocumentCard>
+                          <DocumentCardTitle>상태</DocumentCardTitle>
+                          <DocumentCardText>{getStatusText(documentModal.applicant.status)}</DocumentCardText>
+                        </DocumentCard>
+                      </DocumentGrid>
+                    </DocumentSection>
+
+                    <DocumentSection>
+                      <DocumentSectionTitle>평가 정보</DocumentSectionTitle>
+                      <DocumentGrid>
+                        <DocumentCard>
+                          <DocumentCardTitle>성장배경</DocumentCardTitle>
+                          <DocumentCardText>{documentModal.applicant.growthBackground || 'N/A'}</DocumentCardText>
+                        </DocumentCard>
+                        <DocumentCard>
+                          <DocumentCardTitle>지원동기</DocumentCardTitle>
+                          <DocumentCardText>{documentModal.applicant.motivation || 'N/A'}</DocumentCardText>
+                        </DocumentCard>
+                        <DocumentCard>
+                          <DocumentCardTitle>경력사항</DocumentCardTitle>
+                          <DocumentCardText>{documentModal.applicant.careerHistory || 'N/A'}</DocumentCardText>
+                        </DocumentCard>
+                        <DocumentCard>
+                          <DocumentCardTitle>종합 점수</DocumentCardTitle>
+                          <DocumentCardText>{documentModal.applicant.analysisScore || 0}점</DocumentCardText>
+                        </DocumentCard>
+                        <DocumentCard>
+                          <DocumentCardTitle>분석 결과</DocumentCardTitle>
+                          <DocumentCardText>{documentModal.applicant.analysisResult || '분석 결과 없음'}</DocumentCardText>
+                        </DocumentCard>
+                        <DocumentCard>
+                          <DocumentCardTitle>지원일시</DocumentCardTitle>
+                          <DocumentCardText>{documentModal.applicant.created_at ? new Date(documentModal.applicant.created_at).toLocaleString() : 'N/A'}</DocumentCardText>
+                        </DocumentCard>
+                      </DocumentGrid>
+                    </DocumentSection>
+                  </>
+                )}
+
+                {documentModal.type === 'resume' && !documentModal.isOriginal && documentModal.applicant.documents?.resume && (
                   <>
                     <DocumentSection>
                       <DocumentSectionTitle>개인정보</DocumentSectionTitle>
@@ -3204,6 +3272,18 @@ const ApplicantManagement = () => {
                       </DocumentList>
                     </DocumentSection>
                   </>
+                )}
+
+                {documentModal.type === 'resume' && !documentModal.isOriginal && !documentModal.applicant.documents?.resume && (
+                  <DocumentSection>
+                    <DocumentSectionTitle>이력서 요약</DocumentSectionTitle>
+                    <DocumentCard>
+                      <DocumentCardText>
+                        현재 이 지원자의 상세 이력서 정보는 등록되지 않았습니다.<br/>
+                        <strong>원본보기</strong> 버튼을 클릭하면 DB에 저장된 지원자의 모든 정보를 확인할 수 있습니다.
+                      </DocumentCardText>
+                    </DocumentCard>
+                  </DocumentSection>
                 )}
               </DocumentContent>
             </DocumentModalContent>
