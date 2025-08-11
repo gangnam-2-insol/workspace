@@ -7,6 +7,7 @@ from fastapi.responses import JSONResponse
 import uvicorn
 from motor.motor_asyncio import AsyncIOMotorClient
 from pydantic import BaseModel
+from bson import ObjectId
 from typing import List, Optional, Dict, Any
 import locale
 import codecs
@@ -81,6 +82,19 @@ class Resume(BaseModel):
     analysisScore: int = 0
     analysisResult: str = ""
     status: str = "pending"
+    created_at: Optional[datetime] = None
+
+class ResumeChunk(BaseModel):
+    id: Optional[str] = None
+    resume_id: str
+    chunk_id: str
+    text: str
+    start_pos: int
+    end_pos: int
+    chunk_index: int
+    field_name: Optional[str] = None  # growthBackground, motivation, careerHistory
+    metadata: Optional[Dict[str, Any]] = None
+    vector_id: Optional[str] = None  # Pinecone 벡터 ID
     created_at: Optional[datetime] = None
 
 class Interview(BaseModel):
@@ -270,36 +284,58 @@ async def search_vectors(data: Dict[str, Any]):
 # Chunking Service API
 @app.post("/api/chunking/split")
 async def split_text(data: Dict[str, Any]):
-    """텍스트를 청크로 분할"""
+    """텍스트를 청크로 분할하고 DB에 저장"""
     try:
         text = data.get("text", "")
+        resume_id = data.get("resume_id")
+        field_name = data.get("field_name", "")  # growthBackground, motivation, careerHistory
         chunk_size = data.get("chunk_size", 1000)
         chunk_overlap = data.get("chunk_overlap", 200)
-        split_type = data.get("split_type", "recursive")  # recursive, sentence, paragraph
+        split_type = data.get("split_type", "recursive")
         
-        # 여기서 실제 청킹 로직 구현
-        # 예: RecursiveCharacterTextSplitter 사용
+        if not resume_id:
+            raise HTTPException(status_code=400, detail="resume_id가 필요합니다.")
         
-        # 임시로 청킹 결과 반환
+        # 텍스트 분할 로직
         chunks = []
         text_length = len(text)
         start = 0
-        chunk_id = 0
+        chunk_index = 0
         
         while start < text_length:
             end = min(start + chunk_size, text_length)
             chunk_text = text[start:end]
             
-            chunks.append({
-                "chunk_id": f"chunk_{chunk_id:03d}",
-                "text": chunk_text,
-                "start_pos": start,
-                "end_pos": end,
-                "length": len(chunk_text)
-            })
+            if chunk_text.strip():  # 빈 청크는 제외
+                chunk_id = f"chunk_{chunk_index:03d}"
+                vector_id = f"resume_{resume_id}_{chunk_id}"
+                
+                chunk_doc = {
+                    "resume_id": resume_id,
+                    "chunk_id": chunk_id,
+                    "text": chunk_text,
+                    "start_pos": start,
+                    "end_pos": end,
+                    "chunk_index": chunk_index,
+                    "field_name": field_name,
+                    "vector_id": vector_id,
+                    "metadata": {
+                        "length": len(chunk_text),
+                        "split_type": split_type,
+                        "chunk_size": chunk_size,
+                        "chunk_overlap": chunk_overlap
+                    },
+                    "created_at": datetime.now()
+                }
+                
+                # MongoDB에 청크 저장
+                result = await db.resume_chunks.insert_one(chunk_doc)
+                chunk_doc["id"] = str(result.inserted_id)
+                
+                chunks.append(chunk_doc)
+                chunk_index += 1
             
             start = end - chunk_overlap if chunk_overlap > 0 else end
-            chunk_id += 1
             
             if start >= text_length:
                 break
@@ -308,6 +344,8 @@ async def split_text(data: Dict[str, Any]):
             "chunks": chunks,
             "total_chunks": len(chunks),
             "original_length": text_length,
+            "resume_id": resume_id,
+            "field_name": field_name,
             "split_config": {
                 "chunk_size": chunk_size,
                 "chunk_overlap": chunk_overlap,
@@ -316,6 +354,105 @@ async def split_text(data: Dict[str, Any]):
         }
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"텍스트 분할 실패: {str(e)}")
+
+@app.get("/api/chunking/resume/{resume_id}")
+async def get_resume_chunks(resume_id: str):
+    """특정 이력서의 모든 청크 조회"""
+    try:
+        chunks = await db.resume_chunks.find({"resume_id": resume_id}).to_list(1000)
+        
+        # MongoDB의 _id를 id로 변환
+        for chunk in chunks:
+            chunk["id"] = str(chunk["_id"])
+            del chunk["_id"]
+        
+        return {
+            "resume_id": resume_id,
+            "chunks": [ResumeChunk(**chunk) for chunk in chunks],
+            "total_chunks": len(chunks)
+        }
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"청크 조회 실패: {str(e)}")
+
+@app.post("/api/chunking/process-resume")
+async def process_resume_with_chunking(data: Dict[str, Any]):
+    """이력서 전체를 필드별로 청킹 처리"""
+    try:
+        resume_id = data.get("resume_id")
+        if not resume_id:
+            raise HTTPException(status_code=400, detail="resume_id가 필요합니다.")
+        
+        # 이력서 정보 조회
+        resume = await db.resumes.find_one({"_id": ObjectId(resume_id)})
+        if not resume:
+            raise HTTPException(status_code=404, detail="이력서를 찾을 수 없습니다.")
+        
+        chunk_size = data.get("chunk_size", 800)
+        chunk_overlap = data.get("chunk_overlap", 150)
+        
+        # 청킹할 필드들
+        fields_to_chunk = ["growthBackground", "motivation", "careerHistory"]
+        all_chunks = []
+        
+        for field_name in fields_to_chunk:
+            field_text = resume.get(field_name, "")
+            if field_text and field_text.strip():
+                # 필드별 청킹 처리
+                field_chunks = []
+                text_length = len(field_text)
+                start = 0
+                chunk_index = 0
+                
+                while start < text_length:
+                    end = min(start + chunk_size, text_length)
+                    chunk_text = field_text[start:end]
+                    
+                    if chunk_text.strip():
+                        chunk_id = f"{field_name}_chunk_{chunk_index:03d}"
+                        vector_id = f"resume_{resume_id}_{chunk_id}"
+                        
+                        chunk_doc = {
+                            "resume_id": resume_id,
+                            "chunk_id": chunk_id,
+                            "text": chunk_text,
+                            "start_pos": start,
+                            "end_pos": end,
+                            "chunk_index": chunk_index,
+                            "field_name": field_name,
+                            "vector_id": vector_id,
+                            "metadata": {
+                                "applicant_name": resume.get("name", ""),
+                                "position": resume.get("position", ""),
+                                "department": resume.get("department", ""),
+                                "length": len(chunk_text)
+                            },
+                            "created_at": datetime.now()
+                        }
+                        
+                        result = await db.resume_chunks.insert_one(chunk_doc)
+                        chunk_doc["id"] = str(result.inserted_id)
+                        field_chunks.append(chunk_doc)
+                        chunk_index += 1
+                    
+                    start = end - chunk_overlap if chunk_overlap > 0 else end
+                    if start >= text_length:
+                        break
+                
+                all_chunks.extend(field_chunks)
+        
+        return {
+            "resume_id": resume_id,
+            "applicant_name": resume.get("name", ""),
+            "processed_fields": fields_to_chunk,
+            "total_chunks": len(all_chunks),
+            "chunks_by_field": {
+                field: len([c for c in all_chunks if c["field_name"] == field])
+                for field in fields_to_chunk
+            },
+            "chunks": all_chunks
+        }
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"이력서 청킹 처리 실패: {str(e)}")
 
 @app.post("/api/chunking/merge")
 async def merge_chunks(data: Dict[str, Any]):
@@ -426,6 +563,121 @@ async def get_similarity_metrics():
         }
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"메트릭 조회 실패: {str(e)}")
+
+# 이력서 유사도 체크 API
+@app.post("/api/resume/similarity-check/{resume_id}")
+async def check_resume_similarity(resume_id: str):
+    """특정 이력서의 유사도 체크 (다른 모든 이력서와 비교)"""
+    try:
+        print(f"🔍 유사도 체크 요청 - resume_id: {resume_id}")
+        
+        # ObjectId 변환 시도
+        try:
+            object_id = ObjectId(resume_id)
+            print(f"✅ ObjectId 변환 성공: {object_id}")
+        except Exception as oid_error:
+            print(f"❌ ObjectId 변환 실패: {oid_error}")
+            raise HTTPException(status_code=400, detail=f"잘못된 resume_id 형식: {resume_id}")
+        
+        # 현재 이력서 정보 조회
+        current_resume = await db.resumes.find_one({"_id": object_id})
+        print(f"🔍 데이터베이스 조회 결과: {current_resume is not None}")
+        
+        if not current_resume:
+            # 데이터베이스에 있는 모든 resume ID들 확인
+            all_resumes = await db.resumes.find({}, {"_id": 1, "name": 1}).to_list(100)
+            print(f"📋 데이터베이스의 모든 이력서 ID들:")
+            for resume in all_resumes:
+                print(f"  - {resume['_id']} ({resume.get('name', 'Unknown')})")
+            
+            raise HTTPException(status_code=404, detail=f"이력서를 찾을 수 없습니다. 요청된 ID: {resume_id}")
+        
+        # 다른 모든 이력서 조회 (현재 이력서 제외)
+        other_resumes = await db.resumes.find({"_id": {"$ne": ObjectId(resume_id)}}).to_list(1000)
+        
+        # 현재 이력서의 비교 텍스트 (유사도 계산 필드)
+        current_fields = {
+            "growthBackground": current_resume.get("growthBackground", ""),
+            "motivation": current_resume.get("motivation", ""),
+            "careerHistory": current_resume.get("careerHistory", "")
+        }
+        
+        # 전체 텍스트 조합
+        current_text = " ".join([text for text in current_fields.values() if text])
+        
+        similarity_results = []
+        
+        for other_resume in other_resumes:
+            other_id = str(other_resume["_id"])
+            
+            # 다른 이력서의 비교 텍스트
+            other_fields = {
+                "growthBackground": other_resume.get("growthBackground", ""),
+                "motivation": other_resume.get("motivation", ""), 
+                "careerHistory": other_resume.get("careerHistory", "")
+            }
+            other_text = " ".join([text for text in other_fields.values() if text])
+            
+            # 유사도 계산 (임시로 랜덤 값 사용 - 실제로는 벡터 유사도나 텍스트 유사도 계산)
+            import random
+            overall_similarity = random.uniform(0.1, 0.9)
+            
+            # 필드별 유사도 계산
+            field_similarities = {}
+            for field_name in current_fields.keys():
+                if current_fields[field_name] and other_fields[field_name]:
+                    # 실제로는 각 필드별 유사도 계산 로직 적용
+                    field_similarities[field_name] = random.uniform(0.0, 1.0)
+                else:
+                    field_similarities[field_name] = 0.0
+            
+            similarity_result = {
+                "resume_id": other_id,
+                "applicant_name": other_resume.get("name", "알 수 없음"),
+                "position": other_resume.get("position", ""),
+                "department": other_resume.get("department", ""),
+                "overall_similarity": round(overall_similarity, 4),
+                "field_similarities": {
+                    "growthBackground": round(field_similarities["growthBackground"], 4),
+                    "motivation": round(field_similarities["motivation"], 4),
+                    "careerHistory": round(field_similarities["careerHistory"], 4)
+                },
+                "is_high_similarity": overall_similarity > 0.7,
+                "is_moderate_similarity": 0.4 <= overall_similarity <= 0.7,
+                "is_low_similarity": overall_similarity < 0.4
+            }
+            
+            similarity_results.append(similarity_result)
+        
+        # 유사도 높은 순으로 정렬
+        similarity_results.sort(key=lambda x: x["overall_similarity"], reverse=True)
+        
+        # 통계 정보
+        high_similarity_count = len([r for r in similarity_results if r["is_high_similarity"]])
+        moderate_similarity_count = len([r for r in similarity_results if r["is_moderate_similarity"]])
+        low_similarity_count = len([r for r in similarity_results if r["is_low_similarity"]])
+        
+        return {
+            "current_resume": {
+                "id": resume_id,
+                "name": current_resume.get("name", ""),
+                "position": current_resume.get("position", ""),
+                "department": current_resume.get("department", "")
+            },
+            "similarity_results": similarity_results,
+            "statistics": {
+                "total_compared": len(similarity_results),
+                "high_similarity_count": high_similarity_count,
+                "moderate_similarity_count": moderate_similarity_count,
+                "low_similarity_count": low_similarity_count,
+                "average_similarity": round(sum([r["overall_similarity"] for r in similarity_results]) / len(similarity_results) if similarity_results else 0, 4)
+            },
+            "top_similar": similarity_results[:5] if similarity_results else [],
+            "analysis_timestamp": datetime.now().isoformat()
+        }
+        
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"유사도 체크 실패: {str(e)}")
 
 if __name__ == "__main__":
     uvicorn.run(app, host="0.0.0.0", port=8000) 

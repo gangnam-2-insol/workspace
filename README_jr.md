@@ -161,16 +161,18 @@ POST /api/vector/search
 
 ### 7. Chunking Service APIs
 
-#### 7.1. 텍스트 분할
+#### 7.1. 텍스트 분할 및 DB 저장 🆕
 ```
 POST /api/chunking/split
 ```
 **요청:**
 ```json
 {
-  "text": "긴 이력서 텍스트 내용...",
-  "chunk_size": 1000,
-  "chunk_overlap": 200,
+  "text": "저는 어린 시절부터 컴퓨터와 기술에 관심이 많았습니다...",
+  "resume_id": "6899630301e8bfaa47925da8",
+  "field_name": "growthBackground",
+  "chunk_size": 800,
+  "chunk_overlap": 150,
   "split_type": "recursive"
 }
 ```
@@ -180,24 +182,95 @@ POST /api/chunking/split
 {
   "chunks": [
     {
+      "id": "6899630301e8bfaa47925daa",
+      "resume_id": "6899630301e8bfaa47925da8",
       "chunk_id": "chunk_000",
-      "text": "분할된 텍스트 1",
+      "text": "저는 어린 시절부터 컴퓨터와...",
       "start_pos": 0,
-      "end_pos": 1000,
-      "length": 1000
+      "end_pos": 800,
+      "chunk_index": 0,
+      "field_name": "growthBackground",
+      "vector_id": "resume_6899630301e8bfaa47925da8_chunk_000",
+      "metadata": {
+        "length": 800,
+        "split_type": "recursive",
+        "chunk_size": 800,
+        "chunk_overlap": 150
+      },
+      "created_at": "2025-08-11T12:26:59.039Z"
     }
   ],
-  "total_chunks": 3,
-  "original_length": 2800,
+  "total_chunks": 2,
+  "original_length": 1500,
+  "resume_id": "6899630301e8bfaa47925da8",
+  "field_name": "growthBackground",
   "split_config": {
-    "chunk_size": 1000,
-    "chunk_overlap": 200,
+    "chunk_size": 800,
+    "chunk_overlap": 150,
     "split_type": "recursive"
   }
 }
 ```
 
-#### 7.2. 청크 병합
+#### 7.2. 이력서 전체 청킹 처리 🆕
+```
+POST /api/chunking/process-resume
+```
+**요청:**
+```json
+{
+  "resume_id": "6899630301e8bfaa47925da8",
+  "chunk_size": 800,
+  "chunk_overlap": 150
+}
+```
+
+**응답:**
+```json
+{
+  "resume_id": "6899630301e8bfaa47925da8",
+  "applicant_name": "김민수",
+  "processed_fields": ["growthBackground", "motivation", "careerHistory"],
+  "total_chunks": 8,
+  "chunks_by_field": {
+    "growthBackground": 3,
+    "motivation": 2,
+    "careerHistory": 3
+  },
+  "chunks": [...]
+}
+```
+
+#### 7.3. 이력서별 청크 조회 🆕
+```
+GET /api/chunking/resume/{resume_id}
+```
+
+**응답:**
+```json
+{
+  "resume_id": "6899630301e8bfaa47925da8",
+  "chunks": [
+    {
+      "id": "6899630301e8bfaa47925daa",
+      "resume_id": "6899630301e8bfaa47925da8",
+      "chunk_id": "growthBackground_chunk_000",
+      "text": "저는 어린 시절부터...",
+      "field_name": "growthBackground",
+      "chunk_index": 0,
+      "vector_id": "resume_6899630301e8bfaa47925da8_growthBackground_chunk_000",
+      "metadata": {
+        "applicant_name": "김민수",
+        "position": "프론트엔드",
+        "length": 800
+      }
+    }
+  ],
+  "total_chunks": 8
+}
+```
+
+#### 7.4. 청크 병합
 ```
 POST /api/chunking/merge
 ```
@@ -319,21 +392,130 @@ GET /api/similarity/metrics
 
 ### MongoDB (원본 데이터)
 - **데이터베이스**: `hireme`
-- **컬렉션**: `resumes`
-- 저장 데이터: 이력서 원본 텍스트, 개인정보, 점수 등
+
+#### 1. `resumes` 컬렉션 (기본 이력서 정보)
+```javascript
+{
+  "_id": ObjectId("6899630301e8bfaa47925da8"),
+  "resume_id": "6899630301e8bfaa47925da9",
+  "name": "김민수",
+  "position": "프론트엔드",
+  "department": "개발",
+  "experience": "3-5년", 
+  "skills": "React, JavaScript, TypeScript, CSS",
+  "growthBackground": "저는 어린 시절부터 컴퓨터와 기술에 관심이 많았습니다...",
+  "motivation": "귀사의 혁신적인 프로젝트에 참여하고 싶습니다...",
+  "careerHistory": "3년간 스타트업에서 프론트엔드 개발자로 근무하며...",
+  "analysisScore": 85,
+  "analysisResult": "우수한 프론트엔드 개발자로...",
+  "status": "pending",
+  "created_at": ISODate("2025-08-11T12:26:59.039Z")
+}
+```
+
+#### 2. `resume_chunks` 컬렉션 (청킹된 텍스트 데이터) 🆕
+```javascript
+{
+  "_id": ObjectId("6899630301e8bfaa47925daa"),
+  "resume_id": "6899630301e8bfaa47925da8",
+  "chunk_id": "growthBackground_chunk_000",
+  "text": "저는 어린 시절부터 컴퓨터와 기술에 관심이 많았습니다. 초등학교 때부터...",
+  "start_pos": 0,
+  "end_pos": 800,
+  "chunk_index": 0,
+  "field_name": "growthBackground",
+  "vector_id": "resume_6899630301e8bfaa47925da8_growthBackground_chunk_000",
+  "metadata": {
+    "applicant_name": "김민수",
+    "position": "프론트엔드",
+    "department": "개발",
+    "length": 800
+  },
+  "created_at": ISODate("2025-08-11T12:26:59.039Z")
+}
+```
 
 ### Pinecone (벡터 데이터)
 - **인덱스**: `resume-vectors`
-- 저장 데이터: 텍스트 임베딩 벡터, 메타데이터
-- 벡터 ID 형식: `resume_{resume_id}_{type}`
+- 저장 데이터: 청크별 텍스트 임베딩 벡터, 메타데이터
+
+#### 청킹 적용 전 (기존)
+```python
+{
+  "id": "resume_6899630301e8bfaa47925da8_full",
+  "values": [0.1, 0.2, 0.3, ...],  # 384차원 벡터
+  "metadata": {
+    "resume_id": "6899630301e8bfaa47925da8",
+    "type": "full_resume",
+    "applicant_name": "김민수"
+  }
+}
+```
+
+#### 청킹 적용 후 (신규) 🆕
+```python
+# 성장배경 청크
+{
+  "id": "resume_6899630301e8bfaa47925da8_growthBackground_chunk_000", 
+  "values": [0.1, 0.2, 0.3, ...],  # 384차원 벡터
+  "metadata": {
+    "resume_id": "6899630301e8bfaa47925da8",
+    "chunk_id": "growthBackground_chunk_000",
+    "field_name": "growthBackground",
+    "applicant_name": "김민수",
+    "chunk_index": 0
+  }
+}
+
+# 지원동기 청크
+{
+  "id": "resume_6899630301e8bfaa47925da8_motivation_chunk_000",
+  "values": [0.4, 0.5, 0.6, ...],  # 384차원 벡터  
+  "metadata": {
+    "resume_id": "6899630301e8bfaa47925da8",
+    "chunk_id": "motivation_chunk_000", 
+    "field_name": "motivation",
+    "applicant_name": "김민수",
+    "chunk_index": 0
+  }
+}
+
+# 경력사항 청크
+{
+  "id": "resume_6899630301e8bfaa47925da8_careerHistory_chunk_000",
+  "values": [0.7, 0.8, 0.9, ...],  # 384차원 벡터
+  "metadata": {
+    "resume_id": "6899630301e8bfaa47925da8", 
+    "chunk_id": "careerHistory_chunk_000",
+    "field_name": "careerHistory",
+    "applicant_name": "김민수",
+    "chunk_index": 0
+  }
+}
+```
 
 ## 처리 과정
 
-1. 이력서 원본 텍스트를 MongoDB에 저장
-2. **Sentence Transformers**를 사용하여 텍스트 임베딩 생성
-3. 임베딩 벡터를 Pinecone 벡터 DB에 저장
-4. 메타데이터로 원본과 벡터 연결
-5. Gemini를 사용한 이력서 분석 및 점수 부여
+### 기본 이력서 처리
+1. 이력서 원본 정보를 `resumes` 컬렉션에 저장
+2. Gemini를 사용한 이력서 분석 및 점수 부여
+
+### 청킹 기반 처리 🆕
+1. **텍스트 청킹**: 이력서의 주요 필드들을 의미 단위로 분할
+   - `growthBackground` (성장배경)
+   - `motivation` (지원동기) 
+   - `careerHistory` (경력사항)
+2. **청크 저장**: 각 청크를 `resume_chunks` 컬렉션에 저장
+3. **벡터 변환**: **Sentence Transformers**를 사용하여 청크별 임베딩 생성
+4. **벡터 저장**: 청크별 임베딩 벡터를 Pinecone에 저장
+5. **메타데이터 연결**: 원본 이력서와 청크, 벡터를 연결
+
+### 청킹의 장점
+- ✅ **정확한 검색**: 긴 텍스트에서 특정 부분만 정확히 매칭
+- ✅ **성능 향상**: 작은 단위로 유사도 계산하여 속도 개선
+- ✅ **세밀한 분석**: 필드별/섹션별 독립적 유사도 분석
+- ✅ **메모리 효율성**: 큰 문서도 작은 청크로 나누어 처리
+- ✅ **유연한 검색**: 전체 문서가 아닌 관련 부분만 반환
 
 ## 유사도 검색 시스템
 
