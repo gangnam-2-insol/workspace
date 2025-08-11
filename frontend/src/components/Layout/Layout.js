@@ -178,13 +178,7 @@ const navigationItems = [
     title: '채용 관리',
     items: [
       { name: '채용공고 등록', path: '/job-posting', icon: FiBriefcase },
-      { name: '이력서 관리', path: '/resume', icon: FiFileText },
       { name: '지원자 관리', path: '/applicants', icon: FiUserCheck },
-      { name: '면접 관리', path: '/interview', icon: FiVideo },
-      { name: '캘린더', path: '/interview-calendar', icon: FiCalendar },
-      { name: '포트폴리오 분석', path: '/portfolio', icon: FiCode },
-      { name: '자소서 검증', path: '/cover-letter', icon: FiEdit3 },
-      { name: '인재 추천', path: '/talent', icon: FiUsers }
     ]
   },
   {
