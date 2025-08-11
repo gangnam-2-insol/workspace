@@ -295,6 +295,18 @@ const DetailedAnalysisModal = ({ isOpen, onClose, analysisData }) => {
               </ScoreInfo>
             </OverallScore>
 
+            {analysisData.analysisScore && (
+              <OverallScore style={{ background: 'linear-gradient(135deg, #28a745 0%, #20c997 100%)' }}>
+                <ScoreCircle>
+                  {analysisData.analysisScore}
+                </ScoreCircle>
+                <ScoreInfo>
+                  <ScoreLabel>AI 분석 점수</ScoreLabel>
+                  <ScoreValue>{analysisData.analysisScore}점</ScoreValue>
+                </ScoreInfo>
+              </OverallScore>
+            )}
+
             {/* 문서 타입에 따라 해당하는 분석 결과만 표시 */}
             {detailedAnalysis.resume_analysis && Object.keys(detailedAnalysis.resume_analysis).length > 0 && 
               renderAnalysisSection('이력서 분석', detailedAnalysis.resume_analysis, <FiFileText />)}

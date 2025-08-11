@@ -874,6 +874,44 @@ const ResumeAnalysisScore = styled.span`
   }};
 `;
 
+const AnalysisScoreDisplay = styled.div`
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  margin: 16px 0;
+  padding: 16px;
+  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+  border-radius: 8px;
+  color: white;
+`;
+
+const AnalysisScoreCircle = styled.div`
+  width: 50px;
+  height: 50px;
+  border-radius: 50%;
+  background: rgba(255, 255, 255, 0.2);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 18px;
+  font-weight: 700;
+`;
+
+const AnalysisScoreInfo = styled.div`
+  flex: 1;
+`;
+
+const AnalysisScoreLabel = styled.div`
+  font-size: 14px;
+  opacity: 0.9;
+  margin-bottom: 4px;
+`;
+
+const AnalysisScoreValue = styled.div`
+  font-size: 20px;
+  font-weight: 700;
+`;
+
 const ResumeAnalysisSkills = styled.div`
   display: flex;
   flex-wrap: wrap;
@@ -3065,6 +3103,19 @@ const ApplicantManagement = () => {
                   <FiFile size={20} />
                   AI 분석 요약
                 </SummaryTitle>
+                
+                {selectedApplicant.analysisScore && (
+                  <AnalysisScoreDisplay>
+                    <AnalysisScoreCircle>
+                      {selectedApplicant.analysisScore}
+                    </AnalysisScoreCircle>
+                    <AnalysisScoreInfo>
+                      <AnalysisScoreLabel>AI 분석 점수</AnalysisScoreLabel>
+                      <AnalysisScoreValue>{selectedApplicant.analysisScore}점</AnalysisScoreValue>
+                    </AnalysisScoreInfo>
+                  </AnalysisScoreDisplay>
+                )}
+                
                 <SummaryText>
                   {selectedApplicant.summary}
                 </SummaryText>
@@ -3659,6 +3710,14 @@ const ApplicantManagement = () => {
                         {analysisResult.score}점
                       </ResumeAnalysisScore>
                     </ResumeAnalysisItem>
+                    {selectedApplicant?.analysisScore && (
+                      <ResumeAnalysisItem>
+                        <ResumeAnalysisLabel>AI 분석 점수:</ResumeAnalysisLabel>
+                        <ResumeAnalysisScore score={selectedApplicant.analysisScore}>
+                          {selectedApplicant.analysisScore}점
+                        </ResumeAnalysisScore>
+                      </ResumeAnalysisItem>
+                    )}
                     <ResumeAnalysisItem>
                       <ResumeAnalysisLabel>추출된 기술:</ResumeAnalysisLabel>
                       <ResumeAnalysisSkills>
@@ -3707,7 +3766,10 @@ const ApplicantManagement = () => {
       <DetailedAnalysisModal
         isOpen={showDetailedAnalysis}
         onClose={() => setShowDetailedAnalysis(false)}
-        analysisData={analysisResult}
+        analysisData={{
+          ...analysisResult,
+          analysisScore: selectedApplicant?.analysisScore
+        }}
       />
     </Container>
   );
