@@ -108,3 +108,11 @@ __pycache__/
 
 #가상환경폴더
 workspace/
+/admin/backend/__pycache__
+/admin/backend/__pycache__
+admin/backend/__pycache__/chatbot_router.cpython-313.pyc
+admin/backend/__pycache__/database.cpython-313.pyc
+admin/backend/__pycache__/models.cpython-313.pyc
+admin/backend/__pycache__/models.cpython-313.pyc
+admin/backend/__pycache__/database.cpython-313.pyc
+admin/backend/__pycache__/chatbot_router.cpython-313.pyc
