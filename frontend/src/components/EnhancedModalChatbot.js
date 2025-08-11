@@ -1940,11 +1940,11 @@ const EnhancedModalChatbot = ({
       console.log('[EnhancedModalChatbot] API 요청 시작:', `${API_BASE_URL}/api/chatbot/chat`);
       }
       
-      // 테스트중 모드 API 호출 (LangGraph 시스템 사용)
+      // 테스트중 모드 API 호출
       let data; // 변수를 if/else 블록 외부에서 선언
       
       if (selectedAIMode === 'test_mode') {
-        const testResponse = await fetch(`${API_BASE_URL}/api/chatbot/langgraph-chat`, {
+        const testResponse = await fetch(`${API_BASE_URL}/api/chatbot/test-mode-chat`, {
           method: 'POST',
           headers: {
             'Content-Type': 'application/json',
@@ -1960,12 +1960,12 @@ const EnhancedModalChatbot = ({
 
         if (!testResponse.ok) {
           const errorText = await testResponse.text();
-          console.error('[EnhancedModalChatbot] LangGraph 테스트중 모드 서버 응답 오류:', testResponse.status, errorText);
-          throw new Error(`LangGraph 테스트중 모드 서버 오류: ${testResponse.status} - ${errorText}`);
+          console.error('[EnhancedModalChatbot] 테스트중 모드 서버 응답 오류:', testResponse.status, errorText);
+          throw new Error(`테스트중 모드 서버 오류: ${testResponse.status} - ${errorText}`);
         }
 
         data = await testResponse.json();
-        console.log('[EnhancedModalChatbot] LangGraph 테스트중 모드 AI 응답:', data);
+        console.log('[EnhancedModalChatbot] 테스트중 모드 AI 응답:', data);
       } else {
         const response = await fetch(`${API_BASE_URL}/api/chatbot/chat`, {
         method: 'POST',
@@ -2289,7 +2289,7 @@ const EnhancedModalChatbot = ({
     
     const testModeMessage = {
       type: 'bot',
-      content: '🧪 테스트중 모드를 시작합니다!\n\n🤖 Agent 기반 시스템으로 다양한 도구를 자동으로 선택하여 답변합니다.\n\n다음과 같은 요청을 해보세요:\n• "최신 개발 트렌드 알려줘" (🔍 웹 검색)\n• "연봉 4000만원의 월급" (🧮 계산기)\n• "저장된 채용공고 보여줘" (💾 DB 조회)\n• "채용공고 작성해줘" (📝 채용 도구)\n• "안녕하세요" (💬 일반 대화)',
+      content: '🧪 테스트중 모드를 시작합니다!\n\nLangGraph 기반 Agent 시스템으로 다양한 도구를 자동으로 선택하여 답변합니다.\n\n다음과 같은 요청을 해보세요:\n• "최신 개발 트렌드 알려줘" (검색)\n• "연봉 4000만원의 월급" (계산)\n• "저장된 채용공고 보여줘" (DB 조회)\n• "안녕하세요" (일반 대화)',
       timestamp: new Date(),
       id: `mode-test_mode-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`
     };
@@ -2613,7 +2613,6 @@ const EnhancedModalChatbot = ({
             {/* Tip: 추천/알려줘/추가 같은 요청 문장은 값으로 저장되지 않습니다. 적용하려면 "1번 적용"처럼 말씀해 주세요. */}
             💡 <strong>유용한 팁들:</strong><br></br>
             • 수정이 필요할 경우: "구인 부서 영업팀으로 바꿔줘"<br></br>
-            • 순서가 꼬였을 때: 🔄 처음부터 버튼을 클릭하세요<br></br>
             • 특정 항목만 말하고 싶을 때: "구인 부서만 알려줘"<br></br>
             • 최종 등록: "작성완료"를 입력해주세요
             </div>
