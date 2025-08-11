@@ -226,7 +226,7 @@ const LangGraphChatbot = () => {
   useEffect(() => {
     const fetchSystemInfo = async () => {
       try {
-        const response = await fetch(`${API_BASE_URL}/langgraph-info`);
+        const response = await fetch(`${API_BASE_URL}/api/chatbot/langgraph-info`);
         const data = await response.json();
         setSystemInfo(data);
         
@@ -278,7 +278,7 @@ const LangGraphChatbot = () => {
     setIsLoading(true);
 
     try {
-      const response = await fetch(`${API_BASE_URL}/langgraph-chat`, {
+      const response = await fetch(`${API_BASE_URL}/api/chatbot/langgraph-chat`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',

@@ -17,16 +17,11 @@ import asyncio
 # LangGraph 관련 import
 try:
     # Pydantic 버전 충돌을 피하기 위해 환경 변수 설정
-    import os
     os.environ["LANGCHAIN_TRACING_V2"] = "false"
     os.environ["LANGCHAIN_ENDPOINT"] = ""
     os.environ["LANGCHAIN_API_KEY"] = ""
     
-    # Pydantic 버전 충돌 우회를 위한 임시 설정
-    import sys
-    if "pydantic" in sys.modules:
-        del sys.modules["pydantic"]
-    
+    # LangGraph import 시도
     from langgraph.graph import StateGraph, END
     from langgraph.graph.message import add_messages
     from langgraph.prebuilt import ToolNode
@@ -36,7 +31,7 @@ try:
 except (ImportError, TypeError, Exception) as e:
     LANGGRAPH_AVAILABLE = False
     print(f"❌ LangGraph 라이브러리 로드 실패: {e}")
-    print("💡 Pydantic 버전 충돌일 수 있습니다. LangGraph를 사용하지 않고 기존 시스템으로 대체합니다.")
+    print("💡 LangGraph를 사용하지 않고 기존 시스템으로 대체합니다.")
 
 load_dotenv()
 
