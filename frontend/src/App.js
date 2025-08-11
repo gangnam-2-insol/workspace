@@ -110,6 +110,10 @@ function App() {
         detail: { value: newWorkContent }
       });
       window.dispatchEvent(event);
+    } else if (action === 'openLangGraphRegistration') {
+      // 랭그래프모드용 채용공고등록도우미 열기
+      const event = new CustomEvent('openLangGraphRegistration');
+      window.dispatchEvent(event);
     }
   };
 

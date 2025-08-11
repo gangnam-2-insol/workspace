@@ -1,5 +1,6 @@
 import React, { useState, useRef, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
+import EnhancedModalChatbot from './EnhancedModalChatbot';
 
 const FloatingChatbot = ({ page, onFieldUpdate, onComplete, onPageAction }) => {
   const navigate = useNavigate();
@@ -9,6 +10,9 @@ const FloatingChatbot = ({ page, onFieldUpdate, onComplete, onPageAction }) => {
   const [isLoading, setIsLoading] = useState(false);
   const [uiElements, setUiElements] = useState([]);
   // const [sessionId, setSessionId] = useState(null); // 세션 ID 상태 제거
+  
+  // EnhancedModalChatbot 상태
+  const [showEnhancedModal, setShowEnhancedModal] = useState(false);
   
   // AI 채용공고 작성 도우미 관련 상태
   const [aiMode, setAiMode] = useState(false);
@@ -1511,55 +1515,9 @@ const FloatingChatbot = ({ page, onFieldUpdate, onComplete, onPageAction }) => {
   const startAIChatbot = () => {
     console.log('=== startAIChatbot 함수 호출됨 ===');
     
-    setAiMode(true);
-    setAiStep(1);
-    setAiFormData({
-      department: '',
-      experience: '',
-      experienceYears: '',
-      headcount: '',
-      mainDuties: '',
-      workHours: '',
-      workDays: '',
-      locationCity: '',
-      locationDistrict: '',
-      salary: '',
-      contactEmail: '',
-      deadline: ''
-    });
-    
-    console.log('AI 모드 상태 초기화 완료');
-    
-    // AI 도우미 시작 메시지 추가
-    const aiStartMessage = {
-      type: 'bot',
-      content: '🤖 AI 채용공고 작성 도우미를 시작합니다!\n\n먼저 구인 부서를 알려주세요. (예: 개발, 마케팅, 영업, 디자인 등)',
-      timestamp: new Date()
-    };
-    setMessages(prev => [...prev, aiStartMessage]);
-    
-    console.log('AI 시작 메시지 추가 완료');
-    
-    // 자동 진행 활성화 - 1초 후 텍스트 기반 등록 시작
-    setTimeout(() => {
-      console.log('=== 1초 타이머 완료 - 자동 진행 시작 ===');
-      console.log('onPageAction 존재 여부:', !!onPageAction);
-      
-      if (onPageAction) {
-        console.log('openTextBasedRegistration 액션 호출');
-        onPageAction('openTextBasedRegistration');
-        
-        // 추가로 0.5초 후 AI 챗봇 시작
-        setTimeout(() => {
-          console.log('startTextBasedFlow 액션 호출');
-          if (onPageAction) {
-            onPageAction('startTextBasedFlow');
-          }
-        }, 500);
-      } else {
-        console.log('onPageAction이 없어서 자동 진행 불가');
-      }
-    }, 1000);
+    // EnhancedModalChatbot 열기
+    setShowEnhancedModal(true);
+    console.log('EnhancedModalChatbot 열기 완료');
   };
 
   // AI 응답 처리 함수
@@ -2198,6 +2156,15 @@ const FloatingChatbot = ({ page, onFieldUpdate, onComplete, onPageAction }) => {
           </div>
         </div>
       </div>
+
+      {/* EnhancedModalChatbot */}
+      <EnhancedModalChatbot
+        isOpen={showEnhancedModal}
+        onClose={() => setShowEnhancedModal(false)}
+        onPageAction={onPageAction}
+        formData={{}}
+        pageId="recruit_form"
+      />
     </>
   );
 };

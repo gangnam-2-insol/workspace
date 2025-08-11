@@ -21,6 +21,7 @@ import TextBasedRegistration from './TextBasedRegistration';
 import ImageBasedRegistration from './ImageBasedRegistration';
 import TemplateModal from './TemplateModal';
 import OrganizationModal from './OrganizationModal';
+import LangGraphJobRegistration from './LangGraphJobRegistration';
 
 const Container = styled.div`
   max-width: 1200px;
@@ -318,6 +319,7 @@ const JobPostingRegistration = () => {
   const [showImageRegistration, setShowImageRegistration] = useState(false);
   const [showTemplateModal, setShowTemplateModal] = useState(false);
   const [showOrganizationModal, setShowOrganizationModal] = useState(false);
+  const [showLangGraphRegistration, setShowLangGraphRegistration] = useState(false);
   const [templates, setTemplates] = useState([]);
   const [organizationData, setOrganizationData] = useState({
     structure: '',
@@ -359,6 +361,11 @@ const JobPostingRegistration = () => {
 
       const handleOrganizationModal = () => {
         setShowOrganizationModal(true);
+      };
+
+      const handleLangGraphRegistration = () => {
+        console.log('=== 랭그래프모드용 채용공고등록도우미 열기 ===');
+        setShowLangGraphRegistration(true);
       };
 
     // 새로운 자동 플로우 핸들러들
@@ -450,6 +457,7 @@ const JobPostingRegistration = () => {
     window.addEventListener('openImageRegistration', handleImageRegistration);
     window.addEventListener('openTemplateModal', handleTemplateModal);
     window.addEventListener('openOrganizationModal', handleOrganizationModal);
+    window.addEventListener('openLangGraphRegistration', handleLangGraphRegistration);
     window.addEventListener('startTextBasedFlow', handleStartTextBasedFlow);
     window.addEventListener('startImageBasedFlow', handleStartImageBasedFlow);
     window.addEventListener('startAIAssistant', handleStartAIAssistant);
@@ -467,6 +475,7 @@ const JobPostingRegistration = () => {
       window.removeEventListener('openImageRegistration', handleImageRegistration);
       window.removeEventListener('openTemplateModal', handleTemplateModal);
       window.removeEventListener('openOrganizationModal', handleOrganizationModal);
+      window.removeEventListener('openLangGraphRegistration', handleLangGraphRegistration);
       window.removeEventListener('startTextBasedFlow', handleStartTextBasedFlow);
       window.removeEventListener('startImageBasedFlow', handleStartImageBasedFlow);
       window.removeEventListener('startAIAssistant', handleStartAIAssistant);
@@ -489,6 +498,7 @@ const JobPostingRegistration = () => {
     setShowImageRegistration(false);
     setShowTemplateModal(false);
     setShowOrganizationModal(false);
+    setShowLangGraphRegistration(false);
     setSelectedJob(null);
     setModalMode('view');
     
@@ -1097,6 +1107,13 @@ const JobPostingRegistration = () => {
         onDeleteTemplate={handleDeleteTemplate}
         templates={templates}
         currentData={null}
+      />
+
+      <LangGraphJobRegistration
+        isOpen={showLangGraphRegistration}
+        onClose={() => setShowLangGraphRegistration(false)}
+        onComplete={handleTextRegistrationComplete}
+        organizationData={organizationData}
       />
     </Container>
   );

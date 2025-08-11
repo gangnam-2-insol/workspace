@@ -9,20 +9,20 @@ const AIModeSelector = ({ onModeSelect, selectedMode, onTestModeClick }) => {
       icon: '📝',
       color: '#667eea'
     },
-    {
-      id: 'autonomous',
-      name: '자율모드', 
-      description: 'AI가 자동으로 모든 정보를 수집',
-      icon: '🤖',
-      color: '#764ba2'
-    },
     // {
-    //   id: 'ai_assistant',
-    //   name: 'AI 어시스턴트',
-    //   description: 'AI와 대화하며 채용공고 작성',
-    //   icon: '💬',
-    //   color: '#f093fb'
-    // }
+    //   id: 'autonomous',
+    //   name: '자율모드', 
+    //   description: 'AI가 자동으로 모든 정보를 수집',
+    //   icon: '🤖',
+    //   color: '#764ba2'
+    // },
+    {
+      id: 'langgraph',
+      name: 'LangGraph모드',
+      description: 'AI와 대화하며 채용공고 작성',
+      icon: '💬',
+      color: '#f093fb'
+    }
   ];
 
   return (
@@ -131,7 +131,7 @@ const AIModeSelector = ({ onModeSelect, selectedMode, onTestModeClick }) => {
             </p>
             
             {/* 모드별 추가 설명 */}
-            {mode.id === 'individual_input' && (
+            {/* {mode.id === 'individual_input' && (
               <div style={{
                 marginTop: '6px',
                 padding: '4px 6px',
@@ -142,7 +142,7 @@ const AIModeSelector = ({ onModeSelect, selectedMode, onTestModeClick }) => {
               }}>
                 예: "부서명을 입력해주세요" → "개발팀" → "다음 필드로..."
               </div>
-            )}
+            )} */}
             
             {mode.id === 'autonomous' && (
               <div style={{
@@ -191,7 +191,7 @@ const AIModeSelector = ({ onModeSelect, selectedMode, onTestModeClick }) => {
       )}
       
       {/* 테스트중 버튼 추가 */}
-      <div style={{
+      {/* <div style={{
         marginTop: '16px',
         display: 'flex',
         justifyContent: 'center'
@@ -223,9 +223,9 @@ const AIModeSelector = ({ onModeSelect, selectedMode, onTestModeClick }) => {
           }}
         >
           <span style={{ fontSize: '14px' }}>🧪</span>
-          테스트중
+          테스트중123
         </div>
-      </div>
+      </div> */}
     </div>
   );
 };

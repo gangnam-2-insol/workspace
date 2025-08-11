@@ -14,8 +14,10 @@ const EnhancedModalChatbot = ({
   onFieldUpdate,
   onComplete,
   onTitleRecommendation,  // 새로운 prop: 제목 추천 모달 열기
+  onPageAction,  // 새로운 prop: 페이지 액션 처리
   formData = {},
   pageId = 'recruit_form',
+  initialAIMode = null,  // 초기 AI 모드 설정
   closeOnBackdropClick = false  // 배경 클릭 시 닫기 여부 (기본값: false)
 }) => {
   // API URL 설정 - 환경 변수 또는 기본값 사용
@@ -1170,6 +1172,82 @@ const EnhancedModalChatbot = ({
       return;
     }
 
+    // LangGraph 모드에서 정보 추출 시 LangGraphJobRegistration으로 전달
+    if (selectedAIMode === 'test_mode' && (userInput.toLowerCase().includes('채용') || userInput.toLowerCase().includes('개발') || userInput.toLowerCase().includes('팀') || userInput.toLowerCase().includes('명'))) {
+      // LangGraph 모드에서 채용공고 관련 정보 추출 시
+      console.log('[EnhancedModalChatbot] LangGraph 모드에서 채용공고 정보 추출 감지');
+      
+      // 추출된 정보를 LangGraphJobRegistration으로 전달하는 이벤트 발생
+      const extractedData = {
+        department: '',
+        position: '',
+        headcount: '',
+        experience: '',
+        workType: '',
+        workHours: '',
+        locationCity: '',
+        locationDistrict: '',
+        salary: '',
+        mainDuties: '',
+        requirements: '',
+        benefits: '',
+        contactEmail: '',
+        deadline: ''
+      };
+      
+      // 사용자 입력에서 정보 추출 시도
+      const extractInfo = (text) => {
+        const info = {};
+        
+        // 부서 추출
+        const deptMatch = text.match(/(개발팀|마케팅팀|영업팀|인사팀|기획팀|디자인팀|운영팀|고객지원팀|재무팀|법무팀)/);
+        if (deptMatch) info.department = deptMatch[1];
+        
+        // 직무 추출
+        const positionMatch = text.match(/(개발자|프로그래머|엔지니어|매니저|대리|과장|차장|부장|사원|인턴)/);
+        if (positionMatch) info.position = positionMatch[1];
+        
+        // 인원 추출
+        const headcountMatch = text.match(/(\d+)명/);
+        if (headcountMatch) info.headcount = headcountMatch[1] + '명';
+        
+        // 경력 추출
+        if (text.includes('신입')) info.experience = '신입';
+        else if (text.includes('경력')) info.experience = '경력';
+        
+        // 급여 추출
+        const salaryMatch = text.match(/(\d+)[천만]원/);
+        if (salaryMatch) info.salary = salaryMatch[1] + '만원';
+        
+        // 지역 추출
+        const locationMatch = text.match(/(서울|부산|대구|인천|광주|대전|울산|세종|경기|강원|충북|충남|전북|전남|경북|경남|제주)/);
+        if (locationMatch) info.locationCity = locationMatch[1];
+        
+        return info;
+      };
+      
+      const extractedInfo = extractInfo(userInput);
+      
+              // 추출된 정보가 있으면 LangGraphJobRegistration으로 전달
+        if (Object.keys(extractedInfo).length > 0) {
+          console.log('[EnhancedModalChatbot] 추출된 정보:', extractedInfo);
+          
+          // 원본 텍스트를 LangGraphJobRegistration으로 전달 (동적 폼 생성을 위해)
+          if (onPageAction) {
+            onPageAction('updateLangGraphData', userInput);
+          }
+          
+          // 사용자에게 추출 완료 알림
+          setMessages(prev => [...prev, {
+            type: 'bot',
+            content: `✅ 추출된 정보를 분석하여 LangGraph 채용공고 등록 도우미에 동적 폼으로 변환했습니다!\n\n추출된 정보:\n${Object.entries(extractedInfo).map(([key, value]) => `• ${key}: ${value}`).join('\n')}\n\n이제 폼에서 수정하실 수 있습니다!`,
+            timestamp: new Date(),
+            id: `langgraph-extract-${Date.now()}`,
+            isSuccess: true
+          }]);
+        }
+    }
+
     // 사용자 메시지를 먼저 추가
     const userMessage = createMessage('user', userInput);
 
@@ -2311,6 +2389,53 @@ const EnhancedModalChatbot = ({
 
   // AI 모드 선택 핸들러
   const handleAIModeSelect = (mode) => {
+    console.log('[EnhancedModalChatbot] handleAIModeSelect 호출됨, mode:', mode);
+    console.log('[EnhancedModalChatbot] onPageAction 존재 여부:', !!onPageAction);
+    
+    // langgraph 모드는 새로운 LangGraph 등록 창을 열어야 함
+    if (mode === 'langgraph') {
+      console.log('[EnhancedModalChatbot] LangGraph 모드 선택 - 새로운 창 열기');
+      console.log('[EnhancedModalChatbot] onPageAction 타입:', typeof onPageAction);
+      
+      if (onPageAction) {
+        console.log('[EnhancedModalChatbot] onPageAction 호출: openLangGraphRegistration');
+        onPageAction('openLangGraphRegistration');
+      } else {
+        console.log('[EnhancedModalChatbot] onPageAction이 정의되지 않음!');
+        // Fallback: 직접 이벤트 발생
+        console.log('[EnhancedModalChatbot] Fallback: 직접 이벤트 발생');
+        const event = new CustomEvent('openLangGraphRegistration');
+        window.dispatchEvent(event);
+      }
+      
+      // LangGraph 모드로 설정하고 모달은 그대로 유지
+      setSelectedAIMode('langgraph');
+      setShowModeSelector(false);
+      
+      const langGraphMessage = {
+        type: 'bot',
+        content: '🧪 LangGraph 모드를 시작합니다!\n\n새로운 AI 채용공고 등록 도우미 창이 열렸습니다.\n\nLangGraph 기반 Agent 시스템으로 다양한 도구를 자동으로 선택하여 답변합니다.\n\n다음과 같은 요청을 해보세요:\n• "최신 개발 트렌드 알려줘" (검색)\n• "연봉 4000만원의 월급" (계산)\n• "저장된 채용공고 보여줘" (DB 조회)\n• "안녕하세요" (일반 대화)',
+        timestamp: new Date(),
+        id: `mode-langgraph-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`
+      };
+      
+      setMessages([langGraphMessage]);
+      
+      // LangGraph 모드 선택 후 입력창에 포커스
+      setTimeout(() => {
+        if (inputRef.current) {
+          try {
+            inputRef.current.focus();
+            console.log('[EnhancedModalChatbot] LangGraph 모드 선택 후 입력창 포커스 성공');
+          } catch (e) {
+            console.warn('[EnhancedModalChatbot] LangGraph 모드 선택 후 입력창 포커스 실패:', e);
+          }
+        }
+      }, 200);
+      
+      console.log('[EnhancedModalChatbot] LangGraph 모드 처리 완료');
+      return;
+    }
     setSelectedAIMode(mode);
     setShowModeSelector(false);
     
@@ -2333,13 +2458,19 @@ const EnhancedModalChatbot = ({
         content: '💬 AI 어시스턴트 모드를 시작합니다!\n\n채용공고 작성에 대해 자유롭게 대화하세요.\n\n어떤 도움이 필요하신가요?',
         timestamp: new Date(),
         id: `mode-ai_assistant-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`
+      },
+      'langgraph': {
+        type: 'bot',
+        content: '💬 LangGraph 모드를 시작합니다!\n\nLangGraph 템플릿에 맞춰 단계별로 질문하여 채용공고를 작성해드리겠습니다.\n\n먼저 구인 부서를 알려주세요.',
+        timestamp: new Date(),
+        id: `mode-langgraph-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`
       }
     };
     
     setMessages([modeMessages[mode]]);
 
-    // 개별입력모드 초기 타깃 필드 설정 (폼 시퀀스 기반)
-    if (mode === 'individual_input') {
+    // 개별입력모드 또는 LangGraph 모드 초기 타깃 필드 설정 (폼 시퀀스 기반)
+    if (mode === 'individual_input' || mode === 'langgraph') {
       // 동적 필드 우선: 현재 페이지에서 스캔된 필드만 묻기
       const dynamicFirst = dynamicFields[0]?.name;
       if (dynamicFirst) {
@@ -2399,9 +2530,18 @@ const EnhancedModalChatbot = ({
       } else {
         // 저장된 메시지가 없으면 초기화
         console.log('[EnhancedModalChatbot] 새로운 세션 시작');
-        setShowModeSelector(true);
-        setSelectedAIMode(null);
-        setMessages([]);
+        
+        // initialAIMode가 설정되어 있으면 자동으로 해당 모드로 시작
+        if (initialAIMode) {
+          console.log('[EnhancedModalChatbot] initialAIMode로 자동 시작:', initialAIMode);
+          setShowModeSelector(false);
+          setSelectedAIMode(initialAIMode);
+          handleAIModeSelect(initialAIMode);
+        } else {
+          setShowModeSelector(true);
+          setSelectedAIMode(null);
+          setMessages([]);
+        }
       }
       
       // 공통 상태 초기화
@@ -2502,11 +2642,11 @@ const EnhancedModalChatbot = ({
             <h3 className="enhanced-modal-chatbot-title" style={{ margin: 0, fontSize: '20px', fontWeight: '600' }}>
               AI 어시스턴트
             </h3>
-            {messages.length > 0 && (
+            {/* {messages.length > 0 && (
               <div style={{ fontSize: '12px', opacity: 0.8, marginTop: '2px' }}>
                 💾 세션 자동 저장됨 ({messages.length}개 메시지)
               </div>
-            )}
+            )} */}
           </div>
           <div style={{ display: 'flex', gap: '12px', alignItems: 'center' }}>
             {/* 모드 선택기로 돌아가기 버튼 (AI 모드가 선택된 경우에만 표시) */}
@@ -2611,9 +2751,9 @@ const EnhancedModalChatbot = ({
             }}
           >
             {/* Tip: 추천/알려줘/추가 같은 요청 문장은 값으로 저장되지 않습니다. 적용하려면 "1번 적용"처럼 말씀해 주세요. */}
-            💡 <strong>유용한 팁들:</strong><br></br>
-            • 수정이 필요할 경우: "구인 부서 영업팀으로 바꿔줘"<br></br>
-            • 특정 항목만 말하고 싶을 때: "구인 부서만 알려줘"<br></br>
+            💡 <strong>유용한 팁:</strong><br></br>
+            • 수정이 필요할 경우 예시: "구인 부서 ooo으로 바꿔줘"<br></br>
+            • 특정 항목을 선택하고 싶을 때 예시: "구인 부서만 알려줘"<br></br>
             • 최종 등록: "작성완료"를 입력해주세요
             </div>
           {/* 재시작 버튼 및 진행률 표시 */}
