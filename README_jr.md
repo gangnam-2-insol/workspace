@@ -100,6 +100,221 @@ POST /api/resume/search
 DELETE /api/resume/{resume_id}
 ```
 
+### 6. Vector Service APIs
+
+#### 6.1. 벡터 생성 및 저장
+```
+POST /api/vector/create
+```
+**요청:**
+```json
+{
+  "text": "프론트엔드 개발자로 3년간 근무...",
+  "document_id": "resume_001",
+  "metadata": {
+    "type": "resume",
+    "applicant_id": "app_001"
+  }
+}
+```
+
+**응답:**
+```json
+{
+  "message": "Vector created successfully",
+  "document_id": "resume_001",
+  "vector_dimension": 384,
+  "status": "success"
+}
+```
+
+#### 6.2. 벡터 유사도 검색
+```
+POST /api/vector/search
+```
+**요청:**
+```json
+{
+  "query": "React 개발 경험이 있는 개발자",
+  "top_k": 5,
+  "threshold": 0.7
+}
+```
+
+**응답:**
+```json
+{
+  "results": [
+    {
+      "document_id": "doc_001",
+      "score": 0.95,
+      "text": "검색된 텍스트 샘플 1",
+      "metadata": {
+        "type": "resume",
+        "applicant_id": "app_001"
+      }
+    }
+  ],
+  "total_found": 2
+}
+```
+
+### 7. Chunking Service APIs
+
+#### 7.1. 텍스트 분할
+```
+POST /api/chunking/split
+```
+**요청:**
+```json
+{
+  "text": "긴 이력서 텍스트 내용...",
+  "chunk_size": 1000,
+  "chunk_overlap": 200,
+  "split_type": "recursive"
+}
+```
+
+**응답:**
+```json
+{
+  "chunks": [
+    {
+      "chunk_id": "chunk_000",
+      "text": "분할된 텍스트 1",
+      "start_pos": 0,
+      "end_pos": 1000,
+      "length": 1000
+    }
+  ],
+  "total_chunks": 3,
+  "original_length": 2800,
+  "split_config": {
+    "chunk_size": 1000,
+    "chunk_overlap": 200,
+    "split_type": "recursive"
+  }
+}
+```
+
+#### 7.2. 청크 병합
+```
+POST /api/chunking/merge
+```
+**요청:**
+```json
+{
+  "chunks": [
+    {"text": "첫 번째 청크"},
+    {"text": "두 번째 청크"}
+  ],
+  "separator": "\n\n"
+}
+```
+
+**응답:**
+```json
+{
+  "merged_text": "첫 번째 청크\n\n두 번째 청크",
+  "total_length": 25,
+  "chunks_merged": 2,
+  "separator_used": "\n\n"
+}
+```
+
+### 8. Similarity Service APIs
+
+#### 8.1. 텍스트 유사도 비교
+```
+POST /api/similarity/compare
+```
+**요청:**
+```json
+{
+  "text1": "프론트엔드 개발자입니다",
+  "text2": "React 개발자로 일하고 있습니다",
+  "method": "cosine"
+}
+```
+
+**응답:**
+```json
+{
+  "similarity_score": 0.8542,
+  "method": "cosine",
+  "text1_length": 12,
+  "text2_length": 18,
+  "comparison_result": {
+    "highly_similar": true,
+    "moderately_similar": false,
+    "low_similar": false
+  }
+}
+```
+
+#### 8.2. 일괄 유사도 계산
+```
+POST /api/similarity/batch
+```
+**요청:**
+```json
+{
+  "texts": [
+    "프론트엔드 개발자",
+    "백엔드 개발자",
+    "풀스택 개발자"
+  ],
+  "reference_text": "React 개발자",
+  "method": "cosine",
+  "threshold": 0.7
+}
+```
+
+**응답:**
+```json
+{
+  "results": [
+    {
+      "index": 0,
+      "text_preview": "프론트엔드 개발자",
+      "similarity_score": 0.8945,
+      "above_threshold": true
+    }
+  ],
+  "filtered_results": [...],
+  "total_compared": 3,
+  "above_threshold_count": 1,
+  "method": "cosine",
+  "threshold": 0.7,
+  "reference_text_length": 7
+}
+```
+
+#### 8.3. 유사도 서비스 메트릭
+```
+GET /api/similarity/metrics
+```
+
+**응답:**
+```json
+{
+  "total_comparisons": 1250,
+  "average_similarity": 0.67,
+  "supported_methods": ["cosine", "jaccard", "levenshtein", "semantic"],
+  "performance_stats": {
+    "average_processing_time_ms": 45,
+    "comparisons_per_second": 220,
+    "cache_hit_rate": 0.78
+  },
+  "usage_by_method": {
+    "cosine": 850,
+    "semantic": 300,
+    "jaccard": 70,
+    "levenshtein": 30
+  }
+}
+```
+
 ## 데이터 구조
 
 ### MongoDB (원본 데이터)
@@ -158,12 +373,32 @@ DELETE /api/resume/{resume_id}
 
 ## 주요 기능
 
+### 기본 이력서 관리
 - ✅ 이력서 업로드 및 자동 분석
 - ✅ 유사 이력서 검색 (벡터 유사도)
 - ✅ 이력서 목록 조회 및 페이징
 - ✅ 이력서 상세 조회
 - ✅ 이력서 삭제 (원본 + 벡터)
 - ✅ AI 기반 이력서 분석 및 점수 부여
+
+### Vector Service 기능
+- ✅ 텍스트를 벡터로 변환하여 저장
+- ✅ 벡터 기반 의미적 유사도 검색
+- ✅ 다차원 벡터 공간에서의 문서 검색
+- ✅ 메타데이터 기반 필터링 지원
+
+### Chunking Service 기능
+- ✅ 긴 텍스트를 의미 단위로 분할
+- ✅ 다양한 분할 전략 지원 (recursive, sentence, paragraph)
+- ✅ 청크 크기 및 오버랩 설정 가능
+- ✅ 분할된 청크의 병합 기능
+
+### Similarity Service 기능
+- ✅ 두 텍스트 간의 정확한 유사도 계산
+- ✅ 다양한 유사도 측정 방법 지원 (cosine, jaccard, levenshtein)
+- ✅ 여러 텍스트의 일괄 유사도 비교
+- ✅ 임계값 기반 필터링
+- ✅ 성능 메트릭 및 사용량 통계 제공
 
 ## API 문서
 
