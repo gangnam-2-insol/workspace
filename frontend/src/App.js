@@ -15,7 +15,6 @@ import Settings from './pages/Settings/Settings';
 import FloatingChatbot from './components/FloatingChatbot';
 import AITooltip from './components/AITooltip';
 
-
 function App() {
   const location = useLocation();
   const navigate = useNavigate();
@@ -173,8 +172,6 @@ function App() {
         }}
         onPageAction={handlePageAction}
       />
-
-
     </>
   );
 }
