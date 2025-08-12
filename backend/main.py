@@ -13,7 +13,6 @@ import locale
 import codecs
 from datetime import datetime
 from chatbot import chatbot_router, langgraph_router
-from github import router as github_router
 from similarity_service import SimilarityService
 from embedding_service import EmbeddingService
 from vector_service import VectorService
@@ -59,7 +58,6 @@ async def add_charset_header(request, call_next):
 # 라우터 등록
 app.include_router(chatbot_router, prefix="/api/chatbot", tags=["chatbot"])
 app.include_router(langgraph_router, prefix="/api/langgraph", tags=["langgraph"])
-app.include_router(github_router, prefix="/api", tags=["github"])
 
 # MongoDB 연결
 MONGODB_URI = os.getenv("MONGODB_URI", "mongodb://localhost:27017/hireme")
