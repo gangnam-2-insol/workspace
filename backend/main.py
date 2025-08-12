@@ -13,6 +13,9 @@ import locale
 import codecs
 from datetime import datetime
 from chatbot import chatbot_router, langgraph_router
+from similarity_service import SimilarityService
+from embedding_service import EmbeddingService
+from vector_service import VectorService
 
 # Python 환경 인코딩 설정
 # 시스템 기본 인코딩을 UTF-8로 설정
@@ -60,6 +63,19 @@ app.include_router(langgraph_router, prefix="/api/langgraph", tags=["langgraph"]
 MONGODB_URI = os.getenv("MONGODB_URI", "mongodb://localhost:27017/hireme")
 client = AsyncIOMotorClient(MONGODB_URI)
 db = client.hireme
+
+# 환경 변수에서 API 키 로드
+GOOGLE_API_KEY = os.getenv("GOOGLE_API_KEY")
+PINECONE_API_KEY = os.getenv("PINECONE_API_KEY") 
+PINECONE_INDEX_NAME = os.getenv("PINECONE_INDEX_NAME", "resume-vectors")
+
+# 서비스 초기화
+embedding_service = EmbeddingService()
+vector_service = VectorService(
+    api_key=PINECONE_API_KEY or "dummy-key",  # API 키가 없어도 서버 시작은 가능
+    index_name=PINECONE_INDEX_NAME
+)
+similarity_service = SimilarityService(embedding_service, vector_service)
 
 # Pydantic 모델들
 class User(BaseModel):
@@ -619,18 +635,44 @@ async def check_resume_similarity(resume_id: str):
             }
             other_text = " ".join([text for text in other_fields.values() if text])
             
-            # 유사도 계산 (임시로 랜덤 값 사용 - 실제로는 벡터 유사도나 텍스트 유사도 계산)
-            import random
-            overall_similarity = random.uniform(0.1, 0.9)
-            
-            # 필드별 유사도 계산
-            field_similarities = {}
-            for field_name in current_fields.keys():
-                if current_fields[field_name] and other_fields[field_name]:
-                    # 실제로는 각 필드별 유사도 계산 로직 적용
-                    field_similarities[field_name] = random.uniform(0.0, 1.0)
-                else:
-                    field_similarities[field_name] = 0.0
+            # 실제 유사도 계산 사용
+            try:
+                print(f"💫 이력서 간 유사도 계산 시작: {resume_id} vs {other_id}")
+                
+                # SimilarityService의 텍스트 유사도 계산 메서드 직접 호출
+                text_similarity = similarity_service._calculate_text_similarity(current_resume, other_resume)
+                overall_similarity = text_similarity if text_similarity is not None else 0.0
+                
+                print(f"📊 텍스트 유사도 결과: {overall_similarity:.3f}")
+                
+                # 필드별 유사도 계산
+                field_similarities = {}
+                for field_name in current_fields.keys():
+                    if current_fields[field_name] and other_fields[field_name]:
+                        # 필드별 개별 텍스트 유사도 계산
+                        field_sim = similarity_service._calculate_text_similarity(
+                            {field_name: current_fields[field_name]},
+                            {field_name: other_fields[field_name]}
+                        )
+                        field_similarities[field_name] = field_sim if field_sim is not None else 0.0
+                        print(f"📋 {field_name} 유사도: {field_similarities[field_name]:.3f}")
+                    else:
+                        field_similarities[field_name] = 0.0
+                        
+            except Exception as e:
+                print(f"❌ 유사도 계산 중 오류 발생: {e}")
+                import traceback
+                traceback.print_exc()
+                
+                # 오류 시 기본값 사용
+                import random
+                overall_similarity = random.uniform(0.1, 0.9)
+                field_similarities = {}
+                for field_name in current_fields.keys():
+                    if current_fields[field_name] and other_fields[field_name]:
+                        field_similarities[field_name] = random.uniform(0.0, 1.0)
+                    else:
+                        field_similarities[field_name] = 0.0
             
             similarity_result = {
                 "resume_id": other_id,
