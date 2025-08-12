@@ -874,6 +874,44 @@ const ResumeAnalysisScore = styled.span`
   }};
 `;
 
+const AnalysisScoreDisplay = styled.div`
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  margin: 16px 0;
+  padding: 16px;
+  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+  border-radius: 8px;
+  color: white;
+`;
+
+const AnalysisScoreCircle = styled.div`
+  width: 50px;
+  height: 50px;
+  border-radius: 50%;
+  background: rgba(255, 255, 255, 0.2);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 18px;
+  font-weight: 700;
+`;
+
+const AnalysisScoreInfo = styled.div`
+  flex: 1;
+`;
+
+const AnalysisScoreLabel = styled.div`
+  font-size: 14px;
+  opacity: 0.9;
+  margin-bottom: 4px;
+`;
+
+const AnalysisScoreValue = styled.div`
+  font-size: 20px;
+  font-weight: 700;
+`;
+
 const ResumeAnalysisSkills = styled.div`
   display: flex;
   flex-wrap: wrap;
@@ -2102,7 +2140,7 @@ const ApplicantManagement = () => {
   const [filterStatus, setFilterStatus] = useState('전체');
   const [selectedApplicant, setSelectedApplicant] = useState(null);
   const [isModalOpen, setIsModalOpen] = useState(false);
-  const [documentModal, setDocumentModal] = useState({ isOpen: false, type: '', applicant: null, isOriginal: false });
+  const [documentModal, setDocumentModal] = useState({ isOpen: false, type: '', applicant: null, isOriginal: false, similarityData: null, isLoadingSimilarity: false });
   const [filterModal, setFilterModal] = useState(false);
   const [selectedJobs, setSelectedJobs] = useState([]);
   const [selectedExperience, setSelectedExperience] = useState([]);
@@ -2320,8 +2358,40 @@ const ApplicantManagement = () => {
     setSelectedApplicant(null);
   };
 
-  const handleDocumentClick = (type, applicant) => {
-    setDocumentModal({ isOpen: true, type, applicant, isOriginal: false });
+  const handleDocumentClick = async (type, applicant) => {
+    // 모달 먼저 열기
+    setDocumentModal({ isOpen: true, type, applicant, isOriginal: false, similarityData: null, isLoadingSimilarity: false });
+    
+    // 이력서 타입일 때만 유사도 체크 실행
+    if (type === 'resume') {
+      setDocumentModal(prev => ({ ...prev, isLoadingSimilarity: true }));
+      
+      try {
+        const response = await fetch(`http://localhost:8000/api/resume/similarity-check/${applicant.id}`, {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json'
+          }
+        });
+        
+        if (response.ok) {
+          const similarityData = await response.json();
+          console.log('✅ 유사도 체크 완료:', similarityData);
+          
+          setDocumentModal(prev => ({ 
+            ...prev, 
+            similarityData, 
+            isLoadingSimilarity: false 
+          }));
+        } else {
+          console.error('❌ 유사도 체크 실패:', response.status);
+          setDocumentModal(prev => ({ ...prev, isLoadingSimilarity: false }));
+        }
+      } catch (error) {
+        console.error('❌ 유사도 체크 오류:', error);
+        setDocumentModal(prev => ({ ...prev, isLoadingSimilarity: false }));
+      }
+    }
   };
 
   const handleOriginalClick = () => {
@@ -2329,7 +2399,7 @@ const ApplicantManagement = () => {
   };
 
   const handleCloseDocumentModal = () => {
-    setDocumentModal({ isOpen: false, type: '', applicant: null, isOriginal: false });
+    setDocumentModal({ isOpen: false, type: '', applicant: null, isOriginal: false, similarityData: null, isLoadingSimilarity: false });
   };
 
   const handleFilterClick = () => {
@@ -3033,6 +3103,19 @@ const ApplicantManagement = () => {
                   <FiFile size={20} />
                   AI 분석 요약
                 </SummaryTitle>
+                
+                {selectedApplicant.analysisScore && (
+                  <AnalysisScoreDisplay>
+                    <AnalysisScoreCircle>
+                      {selectedApplicant.analysisScore}
+                    </AnalysisScoreCircle>
+                    <AnalysisScoreInfo>
+                      <AnalysisScoreLabel>AI 분석 점수</AnalysisScoreLabel>
+                      <AnalysisScoreValue>{selectedApplicant.analysisScore}점</AnalysisScoreValue>
+                    </AnalysisScoreInfo>
+                  </AnalysisScoreDisplay>
+                )}
+                
                 <SummaryText>
                   {selectedApplicant.summary}
                 </SummaryText>
@@ -3274,16 +3357,95 @@ const ApplicantManagement = () => {
                   </>
                 )}
 
-                {documentModal.type === 'resume' && !documentModal.isOriginal && !documentModal.applicant.documents?.resume && (
-                  <DocumentSection>
-                    <DocumentSectionTitle>이력서 요약</DocumentSectionTitle>
-                    <DocumentCard>
-                      <DocumentCardText>
-                        현재 이 지원자의 상세 이력서 정보는 등록되지 않았습니다.<br/>
-                        <strong>원본보기</strong> 버튼을 클릭하면 DB에 저장된 지원자의 모든 정보를 확인할 수 있습니다.
-                      </DocumentCardText>
-                    </DocumentCard>
-                  </DocumentSection>
+                {documentModal.type === 'resume' && !documentModal.isOriginal && (
+                  <>
+                    {/* 유사도 체크 결과 섹션 */}
+                    <DocumentSection>
+                      <DocumentSectionTitle>🔍 유사도 체크 결과</DocumentSectionTitle>
+                      
+                      {documentModal.isLoadingSimilarity && (
+                        <DocumentCard>
+                          <DocumentCardText>
+                            📊 다른 이력서들과의 유사도를 분석 중입니다...
+                          </DocumentCardText>
+                        </DocumentCard>
+                      )}
+
+                      {!documentModal.isLoadingSimilarity && documentModal.similarityData && (
+                        <>
+                          {/* 통계 정보 */}
+                          <DocumentCard>
+                            <DocumentCardTitle>📈 유사도 분석 통계</DocumentCardTitle>
+                            <DocumentGrid style={{display: 'grid', gridTemplateColumns: 'repeat(2, 1fr)', gap: '10px'}}>
+                              <div>
+                                <strong>비교 대상:</strong> {documentModal.similarityData.statistics.total_compared}명
+                              </div>
+                              <div>
+                                <strong>평균 유사도:</strong> {(documentModal.similarityData.statistics.average_similarity * 100).toFixed(1)}%
+                              </div>
+                              <div>
+                                <strong>높은 유사도:</strong> {documentModal.similarityData.statistics.high_similarity_count}명 (70% 이상)
+                              </div>
+                              <div>
+                                <strong>중간 유사도:</strong> {documentModal.similarityData.statistics.moderate_similarity_count}명 (40-70%)
+                              </div>
+                            </DocumentGrid>
+                          </DocumentCard>
+
+                          {/* 상위 유사 이력서들 */}
+                          {documentModal.similarityData.top_similar.length > 0 && (
+                            <DocumentCard>
+                              <DocumentCardTitle>🎯 가장 유사한 이력서 TOP 5</DocumentCardTitle>
+                              {documentModal.similarityData.top_similar.map((similar, index) => (
+                                <div key={similar.resume_id} style={{
+                                  padding: '12px',
+                                  margin: '8px 0',
+                                  border: `2px solid ${similar.is_high_similarity ? '#ff4757' : similar.is_moderate_similarity ? '#ffa502' : '#2ed573'}`,
+                                  borderRadius: '8px',
+                                  backgroundColor: similar.is_high_similarity ? '#fff5f5' : similar.is_moderate_similarity ? '#fffbf0' : '#f0fff4'
+                                }}>
+                                  <div style={{fontWeight: 'bold', marginBottom: '4px'}}>
+                                    #{index + 1}. {similar.applicant_name} ({similar.position})
+                                  </div>
+                                  <div style={{fontSize: '14px', color: '#666'}}>
+                                    전체 유사도: <strong style={{color: similar.is_high_similarity ? '#ff4757' : similar.is_moderate_similarity ? '#ffa502' : '#2ed573'}}>
+                                      {(similar.overall_similarity * 100).toFixed(1)}%
+                                    </strong>
+                                  </div>
+                                  <div style={{fontSize: '12px', color: '#888', marginTop: '4px'}}>
+                                    성장배경: {(similar.field_similarities.growthBackground * 100).toFixed(1)}% | 
+                                    지원동기: {(similar.field_similarities.motivation * 100).toFixed(1)}% | 
+                                    경력사항: {(similar.field_similarities.careerHistory * 100).toFixed(1)}%
+                                  </div>
+                                </div>
+                              ))}
+                            </DocumentCard>
+                          )}
+                        </>
+                      )}
+
+                      {!documentModal.isLoadingSimilarity && !documentModal.similarityData && (
+                        <DocumentCard>
+                          <DocumentCardText>
+                            유사도 체크 중 오류가 발생했습니다. 다시 시도해주세요.
+                          </DocumentCardText>
+                        </DocumentCard>
+                      )}
+                    </DocumentSection>
+
+                    {/* 기존 이력서 요약 섹션 */}
+                    {!documentModal.applicant.documents?.resume && (
+                      <DocumentSection>
+                        <DocumentSectionTitle>이력서 요약</DocumentSectionTitle>
+                        <DocumentCard>
+                          <DocumentCardText>
+                            현재 이 지원자의 상세 이력서 정보는 등록되지 않았습니다.<br/>
+                            <strong>원본보기</strong> 버튼을 클릭하면 DB에 저장된 지원자의 모든 정보를 확인할 수 있습니다.
+                          </DocumentCardText>
+                        </DocumentCard>
+                      </DocumentSection>
+                    )}
+                  </>
                 )}
               </DocumentContent>
             </DocumentModalContent>
@@ -3548,6 +3710,14 @@ const ApplicantManagement = () => {
                         {analysisResult.score}점
                       </ResumeAnalysisScore>
                     </ResumeAnalysisItem>
+                    {selectedApplicant?.analysisScore && (
+                      <ResumeAnalysisItem>
+                        <ResumeAnalysisLabel>AI 분석 점수:</ResumeAnalysisLabel>
+                        <ResumeAnalysisScore score={selectedApplicant.analysisScore}>
+                          {selectedApplicant.analysisScore}점
+                        </ResumeAnalysisScore>
+                      </ResumeAnalysisItem>
+                    )}
                     <ResumeAnalysisItem>
                       <ResumeAnalysisLabel>추출된 기술:</ResumeAnalysisLabel>
                       <ResumeAnalysisSkills>
@@ -3596,7 +3766,10 @@ const ApplicantManagement = () => {
       <DetailedAnalysisModal
         isOpen={showDetailedAnalysis}
         onClose={() => setShowDetailedAnalysis(false)}
-        analysisData={analysisResult}
+        analysisData={{
+          ...analysisResult,
+          analysisScore: selectedApplicant?.analysisScore
+        }}
       />
     </Container>
   );
