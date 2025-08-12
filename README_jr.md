@@ -501,13 +501,59 @@ GET /api/similarity/metrics
 2. Gemini를 사용한 이력서 분석 및 점수 부여
 
 ### 청킹 기반 처리 🆕
+
+#### 청킹 서비스 플로우
+
+```mermaid
+graph TD
+    A[이력서 데이터 입력] --> B[ChunkingService.chunk_resume_text]
+    
+    B --> C1[요약/개요 청크<br>summary]
+    B --> C2[기술스택 청크<br>skills]
+    B --> C3[경험 항목별 청크<br>experience]
+    B --> C4[교육 항목별 청크<br>education]
+    B --> C5[성장배경 청크<br>growth_background]
+    B --> C6[지원동기 청크<br>motivation]
+    B --> C7[경력사항 청크<br>career_history]
+    
+    C1 --> D[청크 수집 및 검증]
+    C2 --> D
+    C3 --> D
+    C4 --> D
+    C5 --> D
+    C6 --> D
+    C7 --> D
+    
+    D --> E[MongoDB resume_chunks 컬렉션 저장]
+    E --> F[임베딩 벡터 생성<br>Sentence Transformers]
+    F --> G[Pinecone 벡터 저장]
+    G --> H[메타데이터 연결 완료]
+    
+    style B fill:#e1f5fe
+    style D fill:#f3e5f5
+    style H fill:#e8f5e8
+```
+
+#### 처리 단계별 세부 과정
+
 1. **텍스트 청킹**: 이력서의 주요 필드들을 의미 단위로 분할
-   - `growthBackground` (성장배경)
-   - `motivation` (지원동기) 
-   - `careerHistory` (경력사항)
+   - **summary**: 첫 200자 또는 기본정보 (이름, 직무, 부서)
+   - **skills**: 전체 기술스택 정보
+   - **experience**: 경험을 개별 항목으로 분할 (정규식 기반)
+   - **education**: 교육을 개별 항목으로 분할
+   - **growth_background**: 성장배경 전체
+   - **motivation**: 지원동기 전체
+   - **career_history**: 경력사항 전체
+
 2. **청크 저장**: 각 청크를 `resume_chunks` 컬렉션에 저장
+   - 고유 chunk_id 생성 (`{resume_id}_{chunk_type}`)
+   - 메타데이터 (section, original_field) 포함
+
 3. **벡터 변환**: **Sentence Transformers**를 사용하여 청크별 임베딩 생성
+
 4. **벡터 저장**: 청크별 임베딩 벡터를 Pinecone에 저장
+   - vector_id 생성 (`resume_{resume_id}_{chunk_id}`)
+
 5. **메타데이터 연결**: 원본 이력서와 청크, 벡터를 연결
 
 ### 청킹의 장점
