@@ -12,13 +12,32 @@ import CoverLetterValidation from './pages/CoverLetterValidation/CoverLetterVali
 import TalentRecommendation from './pages/TalentRecommendation/TalentRecommendation';
 import UserManagement from './pages/UserManagement/UserManagement';
 import Settings from './pages/Settings/Settings';
-import FloatingChatbot from './components/FloatingChatbot';
+import FloatingChatbot from './chatbot/components/FloatingChatbot';
 import AITooltip from './components/AITooltip';
+
+
 
 function App() {
   const location = useLocation();
   const navigate = useNavigate();
   const currentPage = location.pathname.replace('/', '') || 'dashboard';
+
+  // 전역 이벤트 리스너 추가 (디버깅용)
+  React.useEffect(() => {
+    const handleGlobalLangGraphDataUpdate = (event) => {
+      console.log('[App.js] 🌍 전역 이벤트 수신:', event);
+      console.log('[App.js] 🌍 이벤트 타입:', event.type);
+      console.log('[App.js] 🌍 이벤트 상세:', event.detail);
+    };
+
+    console.log('[App.js] 전역 이벤트 리스너 등록: langGraphDataUpdate');
+    window.addEventListener('langGraphDataUpdate', handleGlobalLangGraphDataUpdate);
+
+    return () => {
+      console.log('[App.js] 전역 이벤트 리스너 해제');
+      window.removeEventListener('langGraphDataUpdate', handleGlobalLangGraphDataUpdate);
+    };
+  }, []);
 
   const handlePageAction = (action) => { // 이 함수는 'action'이라는 인자 하나만 받습니다.
     console.log('App.js에서 받은 페이지 액션:', action); // 디버깅을 위해 로그를 찍어보세요.

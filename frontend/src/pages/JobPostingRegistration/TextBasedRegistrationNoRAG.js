@@ -2,7 +2,7 @@ import React, { useState, useEffect } from 'react';
 import styled from 'styled-components';
 import { motion, AnimatePresence } from 'framer-motion';
 import TemplateModal from './TemplateModal';
-import EnhancedModalChatbot from '../../components/EnhancedModalChatbot';
+import EnhancedModalChatbot from '../../chatbot/components/EnhancedModalChatbot';
 import './TextBasedRegistration.css';
 import { FiX, FiArrowLeft, FiArrowRight, FiCheck, FiFileText, FiClock, FiMapPin, FiDollarSign, FiUsers, FiMail, FiCalendar, FiFolder, FiSettings } from 'react-icons/fi';
 

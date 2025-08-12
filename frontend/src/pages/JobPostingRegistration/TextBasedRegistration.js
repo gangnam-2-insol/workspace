@@ -2,7 +2,7 @@ import React, { useState, useEffect } from 'react';
 import styled from 'styled-components';
 import { motion, AnimatePresence } from 'framer-motion';
 import TemplateModal from './TemplateModal';
-import EnhancedModalChatbot from '../../components/EnhancedModalChatbot';
+import EnhancedModalChatbot from '../../chatbot/components/EnhancedModalChatbot';
 import TitleRecommendationModal from '../../components/TitleRecommendationModal';
 import TestAutoFillButton from '../../components/TestAutoFillButton';
 import './TextBasedRegistration.css';
@@ -211,6 +211,73 @@ const TextBasedRegistration = ({
     finalFormData: null
   });
 
+  // WebSocket 연결 및 Agent 출력 관리
+  const [wsConnection, setWsConnection] = useState(null);
+  const [agentOutputs, setAgentOutputs] = useState([]);
+  const [sessionId, setSessionId] = useState(null);
+
+  // 랭그래프 Agent 호출 함수
+  const callLangGraphAgent = async (message) => {
+    try {
+      console.log('🤖 랭그래프 Agent 호출:', message);
+      
+      const response = await fetch('/api/langgraph-agent', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          message: message,
+          conversation_history: [],
+          session_id: sessionId
+        }),
+      });
+
+      if (!response.ok) {
+        throw new Error(`HTTP error! status: ${response.status}`);
+      }
+
+      const result = await response.json();
+      console.log('🤖 랭그래프 Agent 응답:', result);
+
+      // 추출된 필드 정보가 있으면 폼에 자동 적용
+      if (result.extracted_fields && Object.keys(result.extracted_fields).length > 0) {
+        console.log('✅ 추출된 필드 정보:', result.extracted_fields);
+        
+        setFormData(prev => {
+          const newFormData = { ...prev, ...result.extracted_fields };
+          console.log('📝 폼 데이터 업데이트:', newFormData);
+          return newFormData;
+        });
+
+        // 성공 알림
+        const fieldNames = Object.keys(result.extracted_fields).join(', ');
+        console.log(`✅ 랭그래프 Agent에서 추출한 정보가 폼에 자동 입력되었습니다! (${fieldNames})`);
+      }
+
+      return result;
+    } catch (error) {
+      console.error('❌ 랭그래프 Agent 호출 오류:', error);
+      return {
+        success: false,
+        response: `랭그래프 Agent 연결에 실패했습니다: ${error.message}`
+      };
+    }
+  };
+
+  // 랭그래프 Agent 테스트 함수
+  const testLangGraphAgent = () => {
+    const testMessages = [
+      "개발자 2명 뽑고 싶어",
+      "연봉 4000만원으로 프론트엔드 개발자 구해요",
+      "서울에서 마케팅팀 1명 채용하려고 해",
+      "신입 개발자 3명 모집, 9 to 6 근무"
+    ];
+    
+    const randomMessage = testMessages[Math.floor(Math.random() * testMessages.length)];
+    callLangGraphAgent(randomMessage);
+  };
+
   // 모달이 열리면 자동으로 AI 도우미 시작
   useEffect(() => {
     if (isOpen) {
@@ -245,6 +312,86 @@ const TextBasedRegistration = ({
     console.log('현재 formData:', formData);
     console.log('입력된 필드들:', Object.keys(formData).filter(key => formData[key]));
   }, [formData]);
+
+  // 랭그래프 Agent 이벤트 수신
+  useEffect(() => {
+    const handleLangGraphFieldUpdate = (event) => {
+      const extractedFields = event.detail.extracted_fields;
+      console.log('🎯 랭그래프 Agent 이벤트 수신:', extractedFields);
+      
+      if (extractedFields && Object.keys(extractedFields).length > 0) {
+        // 필드명 매핑 (백엔드 필드명 → 폼 필드명)
+        const mappedFields = {};
+        Object.entries(extractedFields).forEach(([key, value]) => {
+          switch (key) {
+            case 'location':
+              mappedFields['locationCity'] = value;
+              break;
+            case 'department':
+            case 'headcount':
+            case 'salary':
+            case 'experience':
+            case 'mainDuties':
+            case 'workHours':
+            case 'workDays':
+            case 'contactEmail':
+            case 'deadline':
+              mappedFields[key] = value;
+              break;
+            default:
+              mappedFields[key] = value;
+              break;
+          }
+        });
+        
+        console.log('🔄 필드 매핑 결과:', mappedFields);
+        
+        setFormData(prev => {
+          const newFormData = { ...prev, ...mappedFields };
+          console.log('📝 폼 데이터 업데이트:', newFormData);
+          return newFormData;
+        });
+
+        // 성공 알림
+        const fieldNames = Object.keys(mappedFields).join(', ');
+        console.log(`✅ 랭그래프 Agent에서 추출한 정보가 폼에 자동 입력되었습니다! (${fieldNames})`);
+        
+        // 시각적 피드백 (임시 알림)
+        const notification = document.createElement('div');
+        notification.style.cssText = `
+          position: fixed;
+          top: 20px;
+          right: 20px;
+          background: #667eea;
+          color: white;
+          padding: 15px 20px;
+          border-radius: 8px;
+          box-shadow: 0 4px 12px rgba(0,0,0,0.15);
+          z-index: 10000;
+          font-weight: bold;
+          animation: slideIn 0.3s ease-out;
+        `;
+        notification.textContent = `🎯 ${fieldNames} 필드가 자동으로 입력되었습니다!`;
+        document.body.appendChild(notification);
+        
+        // 3초 후 알림 제거
+        setTimeout(() => {
+          if (notification.parentNode) {
+            notification.parentNode.removeChild(notification);
+          }
+        }, 3000);
+        
+      } else {
+        console.log('⚠️ 추출된 필드가 없습니다.');
+      }
+    };
+
+        window.addEventListener('langGraphDataUpdate', handleLangGraphFieldUpdate);
+    
+    return () => {
+      window.removeEventListener('langGraphDataUpdate', handleLangGraphFieldUpdate);
+    };
+  }, []);
 
   // 폼 필드 업데이트 이벤트 리스너 추가
   useEffect(() => {
@@ -834,6 +981,13 @@ const TextBasedRegistration = ({
                     </Button>
                 <Button className="ai" onClick={startAIChatbot}>
                   🤖 AI 도우미 재시작
+                    </Button>
+                <Button 
+                  className="ai" 
+                  onClick={testLangGraphAgent}
+                  style={{ background: 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)' }}
+                >
+                  🚀 랭그래프 Agent 테스트
                     </Button>
                 <Button className="primary" onClick={handleRegistration}>
                   <FiCheck size={16} />

@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import styled from 'styled-components';
-import EnhancedModalChatbot from '../../components/EnhancedModalChatbot';
+import EnhancedModalChatbot from '../../chatbot/components/EnhancedModalChatbot';
 import LangGraphJobRegistration from '../JobPostingRegistration/LangGraphJobRegistration';
 
 const Container = styled.div`

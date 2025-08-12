@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import styled from 'styled-components';
 import { motion, AnimatePresence } from 'framer-motion';
-import EnhancedModalChatbot from '../../components/EnhancedModalChatbot';
+import EnhancedModalChatbot from '../../chatbot/components/EnhancedModalChatbot';
 import { FiX, FiArrowLeft, FiArrowRight, FiCheck, FiFileText, FiClock, FiMapPin, FiDollarSign, FiUsers, FiMail, FiCalendar, FiFolder, FiSettings } from 'react-icons/fi';
 import './LangGraphJobRegistration.css';
 
@@ -178,6 +178,24 @@ const AINotice = styled.div`
 `;
 
 const LangGraphJobRegistration = ({ isOpen, onClose, initialData = {} }) => {
+  // 랭그래프 모드 닫기 시 기존 세트를 다시 열기 위한 함수
+  const handleClose = () => {
+    console.log('=== 랭그래프 모드 닫기 - 기존 세트 복원 시작 ===');
+    
+    // 1. 플로팅 챗봇 다시 표시
+    const floatingChatbot = document.querySelector('.floating-chatbot');
+    if (floatingChatbot) {
+      floatingChatbot.style.display = 'flex';
+    }
+    
+    // 2. 기존 세트 복원 이벤트 발생
+    window.dispatchEvent(new CustomEvent('restoreOriginalSet'));
+    
+    // 3. 랭그래프 모드 닫기
+    onClose();
+    
+    console.log('=== 랭그래프 모드 닫기 - 기존 세트 복원 완료 ===');
+  };
   const [formData, setFormData] = useState({
     department: '',
     position: '',
@@ -201,6 +219,21 @@ const LangGraphJobRegistration = ({ isOpen, onClose, initialData = {} }) => {
   const [aiChatbot, setAiChatbot] = useState({
     isActive: true  // LangGraph 페이지가 열리면 AI 어시스턴트도 자동으로 열기
   });
+
+  // 준비중 상태 관리
+  const [isPreparing, setIsPreparing] = useState(true);
+  const [preparationMessage, setPreparationMessage] = useState('채용공고 등록 도우미_for langgraph 준비중...');
+
+  // 랭그래프 모드 강제 설정
+  useEffect(() => {
+    if (isOpen && aiChatbot.isActive) {
+      console.log('=== LangGraph 모드 강제 설정 ===');
+      // 랭그래프 모드 시작 이벤트 발생
+      setTimeout(() => {
+        window.dispatchEvent(new CustomEvent('forceLangGraphMode'));
+      }, 500);
+    }
+  }, [isOpen, aiChatbot.isActive]);
 
   // AI에서 추출된 텍스트를 분석하여 동적 폼 필드로 변환
   const [dynamicFields, setDynamicFields] = useState([]);
@@ -358,44 +391,175 @@ const LangGraphJobRegistration = ({ isOpen, onClose, initialData = {} }) => {
 
   // AI에서 추출된 데이터를 받아서 동적 폼으로 변환
   useEffect(() => {
+    console.log('[LangGraphJobRegistration] 컴포넌트 마운트됨 - 이벤트 리스너 등록 시작');
+    
+    let processingTimeout;
+    
     const handleLangGraphDataUpdate = (event) => {
+      console.log('[LangGraphJobRegistration] ✅ 이벤트 수신 성공!');
+      console.log('[LangGraphJobRegistration] 이벤트 수신:', event);
+      console.log('[LangGraphJobRegistration] event.detail:', event.detail);
       const { action, data } = event.detail;
       
-      if (action === 'updateLangGraphData' && data) {
-        console.log('[LangGraphJobRegistration] AI에서 추출된 데이터 수신:', data);
-        
-        // 텍스트 데이터인 경우 분석하여 동적 폼 생성
-        if (typeof data === 'string') {
-          setExtractedText(data);
-          const { fields, extractedData } = analyzeTextAndCreateFields(data);
-          setDynamicFields(fields);
-          
-          // 기존 데이터와 병합하여 업데이트
-          setFormData(prev => {
-            const updatedData = { ...prev, ...extractedData };
-            console.log('[LangGraphJobRegistration] 폼 데이터 업데이트:', updatedData);
-            return updatedData;
-          });
-          
-          displayToast(`✅ AI에서 추출한 정보를 분석하여 ${fields.length}개의 폼 필드를 생성했습니다!`);
-        } else {
-          // 객체 데이터인 경우 기존 방식으로 처리
-          setFormData(prev => {
-            const updatedData = { ...prev, ...data };
-            console.log('[LangGraphJobRegistration] 폼 데이터 업데이트:', updatedData);
-            return updatedData;
-          });
-          
-          const toastMessage = `✅ AI에서 추출한 정보가 자동으로 입력되었습니다!\n\n${Object.entries(data).map(([key, value]) => `• ${key}: ${value}`).join('\n')}`;
-                      displayToast(toastMessage);
+      console.log('[LangGraphJobRegistration] action:', action);
+      console.log('[LangGraphJobRegistration] data:', data);
+      console.log('[LangGraphJobRegistration] data 타입:', typeof data);
+      console.log('[LangGraphJobRegistration] data 키 개수:', data ? Object.keys(data).length : 0);
+      
+      if (action === 'updateLangGraphData' && data && Object.keys(data).length > 0) {
+        // 중복 처리 방지
+        if (processingTimeout) {
+          clearTimeout(processingTimeout);
         }
+        
+        processingTimeout = setTimeout(() => {
+          console.log('[LangGraphJobRegistration] AI에서 추출된 데이터 수신:', data);
+          console.log('[LangGraphJobRegistration] 추출된 필드들:', Object.keys(data));
+          console.log('[LangGraphJobRegistration] 추출된 값들:', Object.values(data));
+          
+          // 준비중 상태 해제 (조용히)
+          setIsPreparing(false);
+          setPreparationMessage('');
+        
+          // 텍스트 데이터인 경우 분석하여 동적 폼 생성
+          if (typeof data === 'string') {
+            setExtractedText(data);
+            const { fields, extractedData } = analyzeTextAndCreateFields(data);
+            setDynamicFields(fields);
+            
+            // 기존 데이터와 병합하여 업데이트
+            setFormData(prev => {
+              const updatedData = { ...prev, ...extractedData };
+              console.log('[LangGraphJobRegistration] 폼 데이터 업데이트:', updatedData);
+              return updatedData;
+            });
+            
+            displayToast(`✅ AI에서 추출한 정보를 분석하여 ${fields.length}개의 폼 필드를 생성했습니다!`);
+          } else {
+            // 객체 데이터인 경우 동적 폼 생성
+            if (typeof data === 'object' && data !== null) {
+              // 키-값 쌍으로 동적 폼 필드 생성
+              const dynamicFormFields = [];
+              const fieldTitles = {
+                'department': '구인 부서',
+                'position': '직무명',
+                'headcount': '모집인원',
+                'experience': '경력요건',
+                'experienceYears': '경력연차',
+                'workType': '근무형태',
+                'workHours': '근무시간',
+                'workDays': '근무요일',
+                'locationCity': '근무위치(도시)',
+                'locationDistrict': '근무위치(구/군)',
+                'salary': '연봉',
+                'mainDuties': '주요업무',
+                'requirements': '자격요건',
+                'benefits': '복리후생',
+                'contactEmail': '연락처 이메일',
+                'deadline': '마감일'
+              };
+              
+              // 각 키-값 쌍에 대해 동적 폼 필드 생성
+              console.log('[LangGraphJobRegistration] fieldTitles:', fieldTitles);
+              Object.entries(data).forEach(([key, value]) => {
+                console.log(`[LangGraphJobRegistration] 처리 중인 필드: ${key} = ${value}`);
+                console.log(`[LangGraphJobRegistration] fieldTitles[${key}]:`, fieldTitles[key]);
+                console.log(`[LangGraphJobRegistration] value 존재 여부:`, !!value);
+                
+                if (value && fieldTitles[key]) {
+                  const field = {
+                    id: key,
+                    label: fieldTitles[key],
+                    type: getFieldType(key, value),
+                    value: value,
+                    required: isRequiredField(key),
+                    icon: getFieldIcon(key),
+                    options: getFieldOptions(key)
+                  };
+                  dynamicFormFields.push(field);
+                  console.log(`[LangGraphJobRegistration] 동적 폼 필드 생성: ${key} = ${value}`);
+                } else {
+                  console.log(`[LangGraphJobRegistration] 필드 생성 실패: ${key} = ${value} (fieldTitles[${key}]: ${fieldTitles[key]})`);
+                }
+              });
+              
+              // 동적 폼 필드 설정
+              setDynamicFields(dynamicFormFields);
+              
+              // 폼 데이터 업데이트
+              setFormData(prev => {
+                const updatedData = { ...prev, ...data };
+                console.log('[LangGraphJobRegistration] 동적 폼 데이터 업데이트:', updatedData);
+                return updatedData;
+              });
+              
+              displayToast(`✅ AI에서 추출한 정보로 ${dynamicFormFields.length}개의 폼 필드를 생성했습니다!`);
+            }
+          }
+        }, 100);
       }
     };
     
+    // 필드 타입 결정 함수
+    const getFieldType = (key, value) => {
+      if (key === 'mainDuties' || key === 'requirements' || key === 'benefits') {
+        return 'textarea';
+      } else if (key === 'contactEmail') {
+        return 'email';
+      } else if (key === 'deadline') {
+        return 'date';
+      } else if (key === 'experience' || key === 'workType' || key === 'workDays') {
+        return 'select';
+      } else {
+        return 'text';
+      }
+    };
+    
+    // 필수 필드 여부 결정 함수
+    const isRequiredField = (key) => {
+      const requiredFields = ['department', 'position', 'headcount', 'experience'];
+      return requiredFields.includes(key);
+    };
+    
+    // 필드 아이콘 결정 함수
+    const getFieldIcon = (key) => {
+      const icons = {
+        'department': '🏢',
+        'position': '👨‍💼',
+        'headcount': '👥',
+        'experience': '🎓',
+        'experienceYears': '📅',
+        'workType': '💼',
+        'workHours': '⏰',
+        'workDays': '📅',
+        'locationCity': '📍',
+        'locationDistrict': '🏢',
+        'salary': '💰',
+        'mainDuties': '📝',
+        'requirements': '✅',
+        'benefits': '🎉',
+        'contactEmail': '📧',
+        'deadline': '⏰'
+      };
+      return icons[key] || '📋';
+    };
+    
+    // 필드 옵션 결정 함수
+    const getFieldOptions = (key) => {
+      const options = {
+        'experience': ['신입', '경력', '신입/경력'],
+        'workType': ['정규직', '계약직', '인턴', '파트타임'],
+        'workDays': ['월~금', '월~토', '평일']
+      };
+      return options[key] || [];
+    };
+    
     // 이벤트 리스너 등록
+    console.log('[LangGraphJobRegistration] 이벤트 리스너 등록: langGraphDataUpdate');
     window.addEventListener('langGraphDataUpdate', handleLangGraphDataUpdate);
     
     return () => {
+      console.log('[LangGraphJobRegistration] 컴포넌트 언마운트 - 이벤트 리스너 해제');
       window.removeEventListener('langGraphDataUpdate', handleLangGraphDataUpdate);
     };
   }, []);
@@ -425,7 +589,7 @@ const LangGraphJobRegistration = ({ isOpen, onClose, initialData = {} }) => {
     console.log('LangGraph 채용공고 등록:', formData);
     // 여기서 실제 제출 로직 구현
     alert('LangGraph 채용공고 등록이 완료되었습니다!');
-    onClose();
+    handleClose();
   };
 
   const handleTestAutoFill = () => {
@@ -507,19 +671,74 @@ const LangGraphJobRegistration = ({ isOpen, onClose, initialData = {} }) => {
                 >
                   🧪 테스트 데이터
                 </button>
-                <CloseButton onClick={onClose}>
+                <CloseButton onClick={handleClose}>
                   <FiX />
                 </CloseButton>
               </div>
             </Header>
 
             <Content aiActive={aiChatbot.isActive}>
-              <AINotice>
-                <FiSettings size={20} />
-                LangGraph AI가 단계별로 질문하여 자동으로 입력해드립니다! (LangGraph 템플릿 기반)
-              </AINotice>
+              {/* 준비중 상태 표시 */}
+              {isPreparing && (
+                <div style={{
+                  display: 'flex',
+                  flexDirection: 'column',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  height: '300px',
+                  textAlign: 'center',
+                  color: '#666',
+                  background: 'linear-gradient(135deg, #f8fafc 0%, #e2e8f0 100%)',
+                  borderRadius: '12px',
+                  margin: '20px 0',
+                  border: '2px dashed #cbd5e0'
+                }}>
+                  <div style={{
+                    fontSize: '48px',
+                    marginBottom: '16px',
+                    animation: 'pulse 2s infinite'
+                  }}>
+                    ⏳
+                  </div>
+                  <h3 style={{
+                    fontSize: '20px',
+                    fontWeight: '600',
+                    marginBottom: '8px',
+                    color: '#374151'
+                  }}>
+                    {preparationMessage}
+                  </h3>
+                  <p style={{
+                    fontSize: '14px',
+                    color: '#6b7280',
+                    maxWidth: '400px',
+                    lineHeight: '1.5'
+                  }}>
+                    AI가 채팅창에서 추출한 정보를 분석하여 동적 폼을 생성하고 있습니다...
+                  </p>
+                  <div style={{
+                    marginTop: '20px',
+                    padding: '12px 24px',
+                    background: 'linear-gradient(135deg, #f093fb 0%, #f5576c 100%)',
+                    color: 'white',
+                    borderRadius: '20px',
+                    fontSize: '14px',
+                    fontWeight: '500'
+                  }}>
+                    🤖 AI 어시스턴트에서 채용 정보를 입력해주세요
+                  </div>
+                </div>
+              )}
 
-              <form onSubmit={handleSubmit}>
+              {/* 준비 완료 후 폼 표시 */}
+              {!isPreparing && (
+                <>
+                  <AINotice>
+                    <FiSettings size={20} />
+                    LangGraph AI가 단계별로 질문하여 자동으로 입력해드립니다! (LangGraph 템플릿 기반)
+                  </AINotice>
+
+                  <form onSubmit={handleSubmit}>
                 {/* 동적 폼 필드 렌더링 */}
                 {dynamicFields.length > 0 && (
                   <FormSection>
@@ -1077,7 +1296,7 @@ const LangGraphJobRegistration = ({ isOpen, onClose, initialData = {} }) => {
                 </FormSection>
 
                 <ButtonGroup>
-                  <Button type="button" className="secondary" onClick={onClose}>
+                  <Button type="button" className="secondary" onClick={handleClose}>
                     취소
                   </Button>
                   <Button type="submit" className="primary">
@@ -1085,12 +1304,20 @@ const LangGraphJobRegistration = ({ isOpen, onClose, initialData = {} }) => {
                     채용공고 등록
                   </Button>
                 </ButtonGroup>
-              </form>
+                </form>
+                </>
+              )}
 
               {/* AI 어시스턴트 */}
               <EnhancedModalChatbot
                 isOpen={aiChatbot.isActive}
-                onClose={() => setAiChatbot(prev => ({ ...prev, isActive: false }))}
+                onClose={() => {
+                  console.log('=== 랭그래프 어시스턴트 닫기 - 채용공고 등록 도우미도 함께 닫기 ===');
+                  // 어시스턴트 닫기
+                  setAiChatbot(prev => ({ ...prev, isActive: false }));
+                  // 채용공고 등록 도우미도 함께 닫기
+                  handleClose();
+                }}
                 onPageAction={(action) => {
                   console.log('LangGraphJobRegistration에서 onPageAction 호출됨:', action);
                   // 이미 LangGraphJobRegistration 안에 있으므로 다른 액션만 처리

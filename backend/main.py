@@ -11,7 +11,7 @@ from typing import List, Optional
 import locale
 import codecs
 from datetime import datetime
-# from chatbot_router import router as chatbot_router
+from chatbot import chatbot_router, langgraph_router
 
 # Python 환경 인코딩 설정
 # 시스템 기본 인코딩을 UTF-8로 설정
@@ -52,7 +52,8 @@ async def add_charset_header(request, call_next):
     return response
 
 # 라우터 등록
-# app.include_router(chatbot_router, prefix="/api/chatbot", tags=["chatbot"])
+app.include_router(chatbot_router, prefix="/api/chatbot", tags=["chatbot"])
+app.include_router(langgraph_router, prefix="/api/langgraph", tags=["langgraph"])
 
 # MongoDB 연결
 MONGODB_URI = os.getenv("MONGODB_URI", "mongodb://localhost:27017/hireme")
