@@ -21,6 +21,7 @@ import TextBasedRegistration from './TextBasedRegistration';
 import ImageBasedRegistration from './ImageBasedRegistration';
 import TemplateModal from './TemplateModal';
 import OrganizationModal from './OrganizationModal';
+import LangGraphJobRegistration from './LangGraphJobRegistration';
 
 const Container = styled.div`
   max-width: 1200px;
@@ -318,6 +319,7 @@ const JobPostingRegistration = () => {
   const [showImageRegistration, setShowImageRegistration] = useState(false);
   const [showTemplateModal, setShowTemplateModal] = useState(false);
   const [showOrganizationModal, setShowOrganizationModal] = useState(false);
+  const [showLangGraphRegistration, setShowLangGraphRegistration] = useState(false);
   const [templates, setTemplates] = useState([]);
   const [organizationData, setOrganizationData] = useState({
     structure: '',
@@ -359,6 +361,39 @@ const JobPostingRegistration = () => {
 
       const handleOrganizationModal = () => {
         setShowOrganizationModal(true);
+      };
+
+      const handleLangGraphRegistration = () => {
+        console.log('=== 랭그래프모드용 채용공고등록도우미 열기 ===');
+        
+        // 기존 세트 완전히 닫기
+        console.log('기존 세트 닫기 시작...');
+        
+        // 1. 기존 AI 채용공고 등록 도우미 닫기
+        setShowTextRegistration(false);
+        setShowImageRegistration(false);
+        setShowMethodModal(false);
+        
+        // 2. 기존 AI 어시스턴트 (EnhancedModalChatbot) 닫기
+        window.dispatchEvent(new CustomEvent('closeEnhancedModalChatbot'));
+        
+        // 3. 플로팅 챗봇 완전히 숨기기
+        const floatingChatbot = document.querySelector('.floating-chatbot');
+        if (floatingChatbot) {
+          floatingChatbot.style.display = 'none';
+        }
+        
+        // 4. 기타 모달들도 닫기
+        setShowForm(false);
+        setShowModal(false);
+        setShowTemplateModal(false);
+        setShowOrganizationModal(false);
+        
+        console.log('기존 세트 닫기 완료');
+        
+        // 5. 랭그래프 세트 열기
+        setShowLangGraphRegistration(true);
+        console.log('랭그래프 세트 열기 완료');
       };
 
     // 새로운 자동 플로우 핸들러들
@@ -444,15 +479,50 @@ const JobPostingRegistration = () => {
       }
     };
 
+    // 기존 세트 복원 핸들러
+    const handleRestoreOriginalSet = () => {
+      console.log('=== 기존 세트 복원 시작 ===');
+      
+      // 플로팅 챗봇 다시 표시
+      const floatingChatbot = document.querySelector('.floating-chatbot');
+      if (floatingChatbot) {
+        floatingChatbot.style.display = 'flex';
+      }
+      
+      // 기존 모달들 상태 초기화 (닫기)
+      setShowLangGraphRegistration(false);
+      
+      console.log('=== 기존 세트 복원 완료 ===');
+    };
+
+    // 랭그래프 채용공고 등록 도우미 닫기 핸들러
+    const handleCloseLangGraphRegistration = () => {
+      console.log('=== 랭그래프 채용공고 등록 도우미 강제 닫기 ===');
+      
+      // 랭그래프 채용공고 등록 도우미 닫기
+      setShowLangGraphRegistration(false);
+      
+      // 플로팅 챗봇 다시 표시
+      const floatingChatbot = document.querySelector('.floating-chatbot');
+      if (floatingChatbot) {
+        floatingChatbot.style.display = 'flex';
+      }
+      
+      console.log('=== 랭그래프 채용공고 등록 도우미 강제 닫기 완료 ===');
+    };
+
     // 이벤트 리스너 등록
     window.addEventListener('openRegistrationMethod', handleRegistrationMethod);
     window.addEventListener('openTextRegistration', handleTextRegistration);
     window.addEventListener('openImageRegistration', handleImageRegistration);
     window.addEventListener('openTemplateModal', handleTemplateModal);
     window.addEventListener('openOrganizationModal', handleOrganizationModal);
+    window.addEventListener('openLangGraphRegistration', handleLangGraphRegistration);
     window.addEventListener('startTextBasedFlow', handleStartTextBasedFlow);
     window.addEventListener('startImageBasedFlow', handleStartImageBasedFlow);
     window.addEventListener('startAIAssistant', handleStartAIAssistant);
+    window.addEventListener('restoreOriginalSet', handleRestoreOriginalSet);
+    window.addEventListener('closeLangGraphRegistration', handleCloseLangGraphRegistration);
     
     // 채팅봇 수정 명령 이벤트 리스너 등록
     window.addEventListener('updateDepartment', handleUpdateDepartment);
@@ -467,9 +537,12 @@ const JobPostingRegistration = () => {
       window.removeEventListener('openImageRegistration', handleImageRegistration);
       window.removeEventListener('openTemplateModal', handleTemplateModal);
       window.removeEventListener('openOrganizationModal', handleOrganizationModal);
+      window.removeEventListener('openLangGraphRegistration', handleLangGraphRegistration);
       window.removeEventListener('startTextBasedFlow', handleStartTextBasedFlow);
       window.removeEventListener('startImageBasedFlow', handleStartImageBasedFlow);
       window.removeEventListener('startAIAssistant', handleStartAIAssistant);
+      window.removeEventListener('restoreOriginalSet', handleRestoreOriginalSet);
+      window.removeEventListener('closeLangGraphRegistration', handleCloseLangGraphRegistration);
       
       // 채팅봇 수정 명령 이벤트 리스너 제거
       window.removeEventListener('updateDepartment', handleUpdateDepartment);
@@ -489,6 +562,7 @@ const JobPostingRegistration = () => {
     setShowImageRegistration(false);
     setShowTemplateModal(false);
     setShowOrganizationModal(false);
+    setShowLangGraphRegistration(false);
     setSelectedJob(null);
     setModalMode('view');
     
@@ -1097,6 +1171,13 @@ const JobPostingRegistration = () => {
         onDeleteTemplate={handleDeleteTemplate}
         templates={templates}
         currentData={null}
+      />
+
+      <LangGraphJobRegistration
+        isOpen={showLangGraphRegistration}
+        onClose={() => setShowLangGraphRegistration(false)}
+        onComplete={handleTextRegistrationComplete}
+        organizationData={organizationData}
       />
     </Container>
   );

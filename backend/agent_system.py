@@ -687,7 +687,7 @@ class AgentSystem:
         self.fallback = FallbackNode()
         self.formatter = ResponseFormatterNode()
         
-    def process_request(self, user_input: str, conversation_history: List[Dict[str, str]] = None) -> Dict[str, Any]:
+    def process_request(self, user_input: str, conversation_history: List[Dict[str, str]] = None, session_id: str = None) -> Dict[str, Any]:
         """사용자 요청을 처리하고 결과를 반환합니다."""
         try:
             # 1단계: 의도 분류
@@ -711,11 +711,18 @@ class AgentSystem:
             # 3단계: 응답 포맷팅
             final_response = self.formatter.format_response(tool_result, intent, error)
             
+            # 4단계: 채용공고 관련 필드 추출 (채용 관련인 경우)
+            extracted_fields = {}
+            if intent == "recruit":
+                extracted_fields = self._extract_job_posting_fields(user_input, tool_result)
+            
             return {
                 "success": True,
                 "response": final_response,
                 "intent": intent,
-                "error": error
+                "error": error,
+                "session_id": session_id,
+                "extracted_fields": extracted_fields  # 추출된 필드 정보 추가
             }
             
         except Exception as e:
@@ -723,8 +730,104 @@ class AgentSystem:
                 "success": False,
                 "response": f"죄송합니다. 요청 처리 중 오류가 발생했습니다: {str(e)}",
                 "intent": "error",
-                "error": str(e)
+                "error": str(e),
+                "extracted_fields": {}
             }
+    
+    def _extract_job_posting_fields(self, user_input: str, tool_result: str) -> Dict[str, str]:
+        """사용자 입력과 도구 결과에서 채용공고 관련 필드를 추출합니다."""
+        try:
+            extracted_fields = {}
+            
+            # 부서/직무 추출
+            department_patterns = [
+                r'([가-힣]+)\s*(담당자|직원|사원|팀원|매니저|리더|책임자|대리|과장|차장|부장|이사|사장)',
+                r'([가-힣]+)\s*(개발자|엔지니어|디자이너|마케터|영업|기획|운영|관리|분석가|컨설턴트)',
+                r'([가-힣]+)\s*(전문가|전문직|기술직|사무직|서비스직|생산직)'
+            ]
+            
+            for pattern in department_patterns:
+                matches = re.findall(pattern, user_input)
+                if matches:
+                    department = matches[0][0] if isinstance(matches[0], tuple) else matches[0]
+                    if len(department) >= 2:  # 2글자 이상인 경우만
+                        extracted_fields['department'] = department
+                        break
+            
+            # 경력 요구사항 추출
+            experience_patterns = [
+                r'(\d+)\s*년\s*(이상|이하|정도|내외)?\s*(경력|경험)',
+                r'(\d+)\s*년차',
+                r'신입|초급|중급|고급|시니어|주니어'
+            ]
+            
+            for pattern in experience_patterns:
+                matches = re.findall(pattern, user_input)
+                if matches:
+                    if '신입' in user_input or '초급' in user_input:
+                        extracted_fields['experience'] = '신입'
+                    elif '시니어' in user_input or '고급' in user_input:
+                        extracted_fields['experience'] = '시니어'
+                    elif '중급' in user_input:
+                        extracted_fields['experience'] = '중급'
+                    elif '주니어' in user_input:
+                        extracted_fields['experience'] = '주니어'
+                    else:
+                        experience = matches[0] if isinstance(matches[0], str) else f"{matches[0][0]}년"
+                        extracted_fields['experience'] = experience
+                    break
+            
+            # 급여 정보 추출
+            salary_patterns = [
+                r'(\d{2,4})\s*만원',
+                r'(\d{2,4})\s*천원',
+                r'(\d{2,4})\s*원',
+                r'연봉\s*(\d{2,4})\s*만원',
+                r'월급\s*(\d{2,4})\s*만원'
+            ]
+            
+            for pattern in salary_patterns:
+                matches = re.findall(pattern, user_input)
+                if matches:
+                    salary = matches[0]
+                    if '천원' in user_input:
+                        salary = f"{int(salary) * 10}만원"
+                    elif '원' in user_input and '만원' not in user_input and '천원' not in user_input:
+                        salary = f"{int(salary) // 10000}만원"
+                    extracted_fields['salary'] = f"{salary}만원"
+                    break
+            
+            # 인원 수 추출
+            headcount_patterns = [
+                r'(\d+)\s*명',
+                r'(\d+)\s*인',
+                r'(\d+)\s*분',
+                r'(\d+)\s*사람'
+            ]
+            
+            for pattern in headcount_patterns:
+                matches = re.findall(pattern, user_input)
+                if matches:
+                    extracted_fields['headcount'] = f"{matches[0]}명"
+                    break
+            
+            # 지역 추출
+            location_patterns = [
+                r'(서울|부산|대구|인천|광주|대전|울산|세종|경기|강원|충북|충남|전북|전남|경북|경남|제주)',
+                r'(강남|강북|강서|강동|서초|송파|마포|용산|성동|광진|동대문|중랑|성북|노원|도봉|양천|구로|금천|영등포|동작|관악|서대문|은평|중구|종로|용산)'
+            ]
+            
+            for pattern in location_patterns:
+                matches = re.findall(pattern, user_input)
+                if matches:
+                    extracted_fields['location'] = matches[0]
+                    break
+            
+            return extracted_fields
+            
+        except Exception as e:
+            print(f"필드 추출 중 오류: {str(e)}")
+            return {}
 
 # 전역 Agent 시스템 인스턴스
 agent_system = AgentSystem()

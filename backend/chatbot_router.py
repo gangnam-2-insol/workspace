@@ -3352,10 +3352,10 @@ async def chat_endpoint(request: ChatbotRequest):
             print(f"[DEBUG] /chat 자유 텍스트 모드 응답 ({page_type}):", response)
             return response
         
-        # AI 어시스턴트 모드 처리 추가
+        # AI 어시스턴트 모드 처리 추가 (랭그래프 모드가 아닌 경우에만 강력 키워드 적용)
         if mode == "ai_assistant":
             print(f"[DEBUG] AI 어시스턴트 모드 처리 시작 - 입력: {user_input}")
-            # 작성 완료 요청인지 확인
+            # 작성 완료 요청인지 확인 (랭그래프 모드에서는 강력 키워드 적용 안함)
             completion_keywords = ['작성해줘', '만들어줘', '등록해줘', '완료', '끝']
             is_completion_request = any(keyword in user_input for keyword in completion_keywords)
             print(f"[DEBUG] AI 어시스턴트 모드 완료 요청 감지: {is_completion_request}")
@@ -3389,14 +3389,14 @@ async def chat_endpoint(request: ChatbotRequest):
             print("[DEBUG] /chat AI 어시스턴트 모드 응답:", response)
             return response
         
-        # 개별입력모드 처리 추가
+        # 개별입력모드 처리 추가 (랭그래프 모드가 아닌 경우에만 강력 키워드 적용)
         if mode == "individual_input":
             print(f"[DEBUG] 개별입력모드 처리 시작 - 입력: {user_input}")
             # 개별입력모드에서는 각 필드를 하나씩 입력받는 방식
             classification = classify_input_with_context(user_input, None)
             print(f"[DEBUG] 개별입력모드 분류 결과: {classification}")
             
-            # 작성 완료 요청인지 확인
+            # 작성 완료 요청인지 확인 (랭그래프 모드에서는 강력 키워드 적용 안함)
             completion_keywords = ['작성해줘', '만들어줘', '등록해줘', '완료', '끝']
             is_completion_request = any(keyword in user_input for keyword in completion_keywords)
             print(f"[DEBUG] 개별입력모드 완료 요청 감지: {is_completion_request}")
@@ -3441,105 +3441,153 @@ async def chat_endpoint(request: ChatbotRequest):
             print("[DEBUG] /chat 개별입력모드 응답:", response)
             return response
         
-        # 자율모드 처리 추가
-        if mode == "autonomous":
-            print(f"[DEBUG] 자율모드 처리 시작 - 입력: {user_input}")
-            # 자율모드에서는 AI가 자동으로 모든 정보를 수집
-            extracted_data = extract_job_info_from_text(user_input)
-            print(f"[DEBUG] 자율모드 추출된 정보: {extracted_data}")
+        # 자율모드 처리 비활성화 (주석 처리)
+        # if mode == "autonomous":
+        #     print(f"[DEBUG] 자율모드 처리 시작 - 입력: {user_input}")
+        #     # 자율모드에서는 AI가 자동으로 모든 정보를 수집
+        #     extracted_data = extract_job_info_from_text(user_input)
+        #     print(f"[DEBUG] 자율모드 추출된 정보: {extracted_data}")
 
-            # 기타 항목 추천 요청 감지 시 번호 선택 형태로 제안
-            if ("기타" in user_input and "추천" in user_input) or ("additional" in user_input.lower() and "recommend" in user_input.lower()):
-                print("[DEBUG] 자율모드 - 기타항목 추천 선택형 응답 생성")
-                additional_options = [
-                    "식대/중식 제공",
-                    "최신 장비 제공(MacBook/모니터)",
-                    "교육비·도서 구입비 지원",
-                    "시차출퇴근/유연근무제",
-                    "주 2일 재택(하이브리드)",
-                    "건강검진/단체상해보험",
-                    "경조사비 및 경조휴가",
-                    "리프레시 휴가",
-                    "주간 기술공유/스터디",
-                    "회식 강요 없음"
-                ]
-                numbered = "\n".join([f"{i+1}. {opt}" for i, opt in enumerate(additional_options)])
-                selection_msg = (
-                    f"다음 중 '기타 항목'에 포함할 내용을 번호로 선택해 주세요. (복수 선택 가능, 예: 1,3,5)\n\n{numbered}"
-                )
-                items = [{"id": f"item_{i+1}", "text": opt, "selected": False} for i, opt in enumerate(additional_options)]
-                response = {
-                    "type": "ai_assistant",
-                    "content": selection_msg,
-                    "items": items,
-                    "show_item_selection": True,
-                    "confidence": 0.9
-                }
-                print("[DEBUG] /chat 자율모드 기타항목 선택 응답:", response)
-                return response
+        #     # 기타 항목 추천 요청 감지 시 번호 선택 형태로 제안
+        #     if ("기타" in user_input and "추천" in user_input) or ("additional" in user_input.lower() and "recommend" in user_input.lower()):
+        #         print("[DEBUG] 자율모드 - 기타항목 추천 선택형 응답 생성")
+        #         additional_options = [
+        #             "식대/중식 제공",
+        #             "최신 장비 제공(MacBook/모니터)",
+        #             "교육비·도서 구입비 지원",
+        #             "시차출퇴근/유연근무제",
+        #             "주 2일 재택(하이브리드)",
+        #             "건강검진/단체상해보험",
+        #             "경조사비 및 경조휴가",
+        #             "리프레시 휴가",
+        #             "주간 기술공유/스터디",
+        #             "회식 강요 없음"
+        #         ]
+        #         numbered = "\n".join([f"{i+1}. {opt}" for i, opt in enumerate(additional_options)])
+        #         selection_msg = (
+        #             f"다음 중 '기타 항목'에 포함할 내용을 번호로 선택해 주세요. (복수 선택 가능, 예: 1,3,5)\n\n{numbered}"
+        #         )
+        #         items = [{"id": f"item_{i+1}", "text": opt, "selected": False} for i, opt in enumerate(additional_options)]
+        #         response = {
+        #             "type": "ai_assistant",
+        #             "content": selection_msg,
+        #             "items": items,
+        #             "show_item_selection": True,
+        #             "confidence": 0.9
+        #         }
+        #         print("[DEBUG] /chat 자율모드 기타항목 선택 응답:", response)
+        #         return response
             
-            # JSON 데이터를 문자열로 변환
-            extracted_info_text = ""
-            if extracted_data:
-                for key, value in extracted_data.items():
-                    field_name = {
-                        '부서': '부서',
-                        '인원': '인원',
-                        '지역': '지역',
-                        '근무시간': '근무시간',
-                        '근무요일': '근무요일',
-                        '경력': '경력',
-                        '연봉': '연봉',
-                        '업무': '업무'
-                    }.get(key, key)
-                    extracted_info_text += f"• {field_name}: {value}\n"
+        #     # JSON 데이터를 문자열로 변환
+        #     extracted_info_text = ""
+        #     if extracted_data:
+        #         for key, value in extracted_data.items():
+        #             field_name = {
+        #                 '부서': '부서',
+        #                 '인원': '인원',
+        #                 '지역': '지역',
+        #                 '근무시간': '근무시간',
+        #                 '근무요일': '근무요일',
+        #                 '경력': '경력',
+        #                 '연봉': '연봉',
+        #                 '업무': '업무'
+        #             }.get(key, key)
+        #             extracted_info_text += f"• {field_name}: {value}\n"
             
-            if extracted_data and extracted_info_text:
-                # 작성 완료 요청인지 확인
-                completion_keywords = ['작성해줘', '만들어줘', '등록해줘', '완료', '끝']
-                is_completion_request = any(keyword in user_input for keyword in completion_keywords)
-                print(f"[DEBUG] 자율모드 완료 요청 감지: {is_completion_request}")
-                print(f"[DEBUG] 자율모드 입력에서 키워드 확인: {[kw for kw in completion_keywords if kw in user_input]}")
-                print(f"[DEBUG] 자율모드 입력 텍스트: '{user_input}'")
+        #     if extracted_data and extracted_info_text:
+        #         # 작성 완료 요청인지 확인
+        #         completion_keywords = ['작성해줘', '만들어줘', '등록해줘', '완료', '끝']
+        #         is_completion_request = any(keyword in user_input for keyword in completion_keywords)
+        #         print(f"[DEBUG] 자율모드 완료 요청 감지: {is_completion_request}")
+        #         print(f"[DEBUG] 자율모드 입력에서 키워드 확인: {[kw for kw in completion_keywords if kw in user_input]}")
+        #         print(f"[DEBUG] 자율모드 입력 텍스트: '{user_input}'")
                 
-                if is_completion_request:
-                    print(f"[DEBUG] 자율모드 완료 응답 생성")
+        #         if is_completion_request:
+        #             print(f"[DEBUG] 자율모드 완료 응답 생성")
+        #             response = {
+        #                 "type": "autonomous_completion",
+        #                 "content": f"""✅ 자율모드 채용공고 작성이 완료되었습니다!
+
+        # 🎯 추출된 정보:
+        # {extracted_info_text}
+
+        # 📋 다음 단계:
+        # 1. 폼에서 작성된 내용을 확인해주세요
+        # 2. 필요한 경우 추가 정보를 입력해주세요  
+        # 3. "등록하기" 버튼을 클릭하여 채용공고를 등록하세요
+
+        # 💡 추가로 수정하거나 궁금한 점이 있으시면 언제든 말씀해주세요!
+
+        # 🚀 채용공고 등록이 완료되면 지원자들이 바로 확인할 수 있습니다.""",
+        #                 "confidence": 0.95
+        #             }
+        #         else:
+        #             print(f"[DEBUG] 자율모드 일반 응답 생성")
+        #             response = {
+        #                 "type": "autonomous_collection",
+        #                 "content": f"자율모드로 정보를 수집하겠습니다! 🚀\n\n추출된 정보:\n{extracted_info_text}\n\n추가 정보가 필요하면 말씀해주세요.",
+        #                 "extracted_data": extracted_data,  # 추출된 데이터 포함
+        #                 "confidence": 0.9
+        #             }
+        #     else:
+        #         # 정보 추출이 안된 경우 AI 어시스턴트로 처리
+        #         ai_response = await call_ai_api(user_input, conversation_history)
+        #         response = {
+        #             "type": "ai_assistant",
+        #             "content": ai_response,
+        #             "confidence": 0.85
+        #         }
+            
+        #     print("[DEBUG] /chat 자율모드 응답:", response)
+        #     return response
+        
+        # 랭그래프 모드 처리 추가 (강력 키워드 적용 안함)
+        if mode == "langgraph":
+            print(f"[DEBUG] 랭그래프 모드 처리 시작 - 입력: {user_input}")
+            
+            # 랭그래프 모드에서는 강력 키워드('제출', '등록' 등)를 일반 대화로 처리
+            completion_keywords = ['작성해줘', '만들어줘', '등록해줘', '완료', '끝', '제출', '등록']
+            is_completion_request = any(keyword in user_input for keyword in completion_keywords)
+            
+            if is_completion_request:
+                # 강력 키워드가 있어도 일반 대화로 처리
+                print(f"[DEBUG] 랭그래프 모드에서 강력 키워드 감지됨: {[kw for kw in completion_keywords if kw in user_input]}")
+                print(f"[DEBUG] 랭그래프 모드에서는 강력 키워드를 일반 대화로 처리합니다.")
+            
+            try:
+                # Agent 시스템을 사용하여 요청 처리
+                session_id = request.session_id or str(uuid.uuid4())
+                result = agent_system.process_request(
+                    user_input=user_input,
+                    conversation_history=conversation_history,
+                    session_id=session_id
+                )
+                
+                if result["success"]:
                     response = {
-                        "type": "autonomous_completion",
-                        "content": f"""✅ 자율모드 채용공고 작성이 완료되었습니다!
-
-🎯 추출된 정보:
-{extracted_info_text}
-
-📋 다음 단계:
-1. 폼에서 작성된 내용을 확인해주세요
-2. 필요한 경우 추가 정보를 입력해주세요  
-3. "등록하기" 버튼을 클릭하여 채용공고를 등록하세요
-
-💡 추가로 수정하거나 궁금한 점이 있으시면 언제든 말씀해주세요!
-
-🚀 채용공고 등록이 완료되면 지원자들이 바로 확인할 수 있습니다.""",
-                        "confidence": 0.95
-                    }
-                else:
-                    print(f"[DEBUG] 자율모드 일반 응답 생성")
-                    response = {
-                        "type": "autonomous_collection",
-                        "content": f"자율모드로 정보를 수집하겠습니다! 🚀\n\n추출된 정보:\n{extracted_info_text}\n\n추가 정보가 필요하면 말씀해주세요.",
-                        "extracted_data": extracted_data,  # 추출된 데이터 포함
+                        "type": "langgraph_response",
+                        "content": result["response"],
+                        "intent": result["intent"],
                         "confidence": 0.9
                     }
-            else:
-                # 정보 추출이 안된 경우 AI 어시스턴트로 처리
-                ai_response = await call_ai_api(user_input, conversation_history)
+                else:
+                    response = {
+                        "type": "langgraph_error",
+                        "content": "죄송합니다. 랭그래프 모드에서 오류가 발생했습니다.",
+                        "confidence": 0.5
+                    }
+                
+                print("[DEBUG] /chat 랭그래프 모드 응답:", response)
+                return response
+                
+            except Exception as e:
+                print(f"[DEBUG] 랭그래프 모드 처리 중 오류: {str(e)}")
                 response = {
-                    "type": "ai_assistant",
-                    "content": ai_response,
-                    "confidence": 0.85
+                    "type": "langgraph_error",
+                    "content": f"랭그래프 모드 처리 중 오류가 발생했습니다: {str(e)}",
+                    "confidence": 0.5
                 }
-            
-            print("[DEBUG] /chat 자율모드 응답:", response)
-            return response
+                return response
         
         # 1) 키워드 기반 1차 분류 (이미 위에서 처리됨)
         print(f"[DEBUG] /chat 분류 결과: {classification}")
@@ -4245,7 +4293,6 @@ async def handle_user_question(user_input: str, page_id: str, current_state: dic
             'is_conversation': True,
             'type': 'question_response'
         }
-
 def detect_target_field(user_input: str, page_id: str, current_state: dict) -> str:
     """
     사용자 답변에서 대상 필드 감지
@@ -4366,3 +4413,32 @@ async def simulate_llm_response(user_input: str, current_field: str, session: Di
     conversation_history = session.get('conversation_history', [])
     
     return await universal_chatbot_handler(user_input, page_id, current_state, conversation_history)
+
+# 랭그래프 Agent API 엔드포인트
+@router.post("/langgraph-agent")
+async def langgraph_agent_endpoint(request: dict):
+    """랭그래프 Agent 시스템 엔드포인트"""
+    try:
+        user_input = request.get("message", "")
+        conversation_history = request.get("conversation_history", [])
+        session_id = request.get("session_id", str(uuid.uuid4()))
+        
+        # Agent 시스템 호출
+        result = agent_system.process_request(
+            user_input=user_input,
+            conversation_history=conversation_history,
+            session_id=session_id
+        )
+        
+        return {
+            "success": result["success"],
+            "response": result["response"],
+            "intent": result["intent"],
+            "session_id": session_id,
+            "extracted_fields": result.get("extracted_fields", {}),
+            "confidence": 0.9
+        }
+        
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
